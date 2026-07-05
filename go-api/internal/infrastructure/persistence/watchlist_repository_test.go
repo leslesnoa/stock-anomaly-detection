@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPgWatchlistRepository_FindAll_Empty(t *testing.T) {
+func TestPgWatchlistRepository_FindByUserID_Empty(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -24,14 +24,11 @@ func TestPgWatchlistRepository_FindAll_Empty(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close(ctx)
 
-	// Apply migration
-	migration, err := os.ReadFile("../../../migrations/001_initial_schema.sql")
-	require.NoError(t, err)
-	_, err = conn.Exec(ctx, string(migration))
+	_, err = conn.Exec(ctx, "TRUNCATE watchlist CASCADE")
 	require.NoError(t, err)
 
 	repo := persistence.NewPgWatchlistRepository(conn)
-	watchlists, err := repo.FindAll(ctx)
+	watchlists, err := repo.FindByUserID(ctx, "00000000-0000-0000-0000-000000000000")
 	require.NoError(t, err)
 	assert.NotNil(t, watchlists)
 	assert.IsType(t, []watchlist.Watchlist{}, watchlists)
