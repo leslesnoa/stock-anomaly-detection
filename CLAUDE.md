@@ -1,0 +1,34 @@
+# 株価異常検知 × AI自動分析通知システム
+
+## プロジェクト構造
+- モノレポ: `go-api/`（Goサーバー）、`python-engine/`（将来）、`frontend/`（将来）
+- Goモジュール: `github.com/stock-anomaly-detection/go-api`（`go-api/`内で操作）
+
+## Goコマンド（`go-api/`ディレクトリから実行）
+- `go test -race -short ./...` — 単体テスト（外部サービス不要）
+- `go test -race ./...` — 統合テスト（DATABASE_URL + REDIS_URL 必要）
+- `go build ./...` — ビルド確認
+
+## アーキテクチャ
+- Clean Architecture + Pragmatic DDD（bounded context・domain eventsなし）
+- 依存方向: `infrastructure/usecase` → `domain`（逆方向禁止）
+- リポジトリインターフェースはdomainパッケージ内に定義
+
+## 重要な設計決定
+- DBスキーマ: UUID PK（`gen_random_uuid()`）、`int64`不使用
+- `WatchlistRepository.FindByUserID(ctx, userID string)` — userIDはUUID文字列
+- Redisキー: `price:<4桁コード>`、スライディングウィンドウ30件
+- J-Quants APIコード: 4桁→5桁（末尾0追加）、JSON key: `"refreshToken"`（camelCase）
+
+## テスト方針
+- 統合テスト: `testing.Short()` または環境変数未設定でスキップ
+- J-Quantsクライアント: `httptest.NewServer`でモック（実API呼び出しなし）
+- `-race`フラグ必須（JQuantsClientのidTokenはsync.Mutexで保護済み）
+
+## GitHub Actions CI
+- postgres:16 + redis:7 サービス
+- `DATABASE_URL: postgres://postgres:postgres@localhost:5432/stock_anomaly_test?sslmode=disable`
+- `REDIS_URL: redis://localhost:6379`
+
+## 環境変数（本番）
+DATABASE_URL, REDIS_URL, JQUANTS_EMAIL, JQUANTS_PASSWORD, STOCK_CODES（カンマ区切り4桁コード）, ANOMALY_THRESHOLD（デフォルト2.5）
