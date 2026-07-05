@@ -1,0 +1,109 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go test ./...)",
+      "Bash(go test *)",
+      "Bash(go build *)",
+      "Bash(go fmt *)",
+      "Bash(go vet *)",
+      "Bash(go mod *)",
+      "Bash(golangci-lint *)",
+      "Bash(gofmt *)",
+      "Bash(goimports *)",
+      "Bash(pytest *)",
+      "Bash(ruff *)",
+      "Bash(python -m pytest *)",
+      "Bash(npm run *)",
+      "Bash(npx *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(git stash *)",
+      "Bash(ls *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(make *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean -f *)",
+      "Bash(DROP TABLE*)",
+      "Bash(drop table*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Bash(cat .env*)",
+      "Bash(cat **/.env*)",
+      "Bash(echo * > .env*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command // empty' 2>/dev/null); if echo \"$cmd\" | grep -qE '^git commit'; then /Users/watanabekeisuke/Documents/stock-anomaly-detection/.claude/hooks/pre-commit-check.sh; fi",
+            "timeout": 120,
+            "statusMessage": "コミット前チェック（go test / golangci-lint / pytest）を実行中..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/watanabekeisuke/Documents/stock-anomaly-detection/.claude/hooks/stop-lint.sh",
+            "timeout": 60,
+            "statusMessage": "lint チェックを実行中..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=$(jq -r '.tool_input.file_path // empty' 2>/dev/null); if echo \"$file\" | grep -qE '\\.go$'; then gofmt -w \"$file\" 2>/dev/null || true; fi",
+            "statusMessage": "gofmt を実行中..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=$(jq -r '.tool_input.file_path // empty' 2>/dev/null); if echo \"$file\" | grep -qE '\\.py$'; then ruff format \"$file\" 2>/dev/null || true; fi",
+            "statusMessage": "ruff format を実行中..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=$(jq -r '.tool_input.file_path // empty' 2>/dev/null); if echo \"$file\" | grep -qE '\\.(ts|tsx|js|jsx)$'; then npx prettier --write \"$file\" 2>/dev/null || true; fi",
+            "statusMessage": "prettier を実行中..."
+          }
+        ]
+      }
+    ]
+  }
+}
