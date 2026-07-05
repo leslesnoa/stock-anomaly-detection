@@ -15,8 +15,9 @@ func TestNewStockCode(t *testing.T) {
 		wantErr bool
 	}{
 		{"valid 4-digit code", "7203", false},
-		{"valid 5-digit code", "72030", false},
 		{"empty code returns error", "", true},
+		{"5-digit code returns error", "72030", true},
+		{"non-numeric code returns error", "ABCD", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

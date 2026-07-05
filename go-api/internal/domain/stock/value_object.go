@@ -1,12 +1,17 @@
 package stock
 
-import "errors"
+import (
+	"errors"
+	"regexp"
+)
 
 type StockCode string
 
+var stockCodeRegexp = regexp.MustCompile(`^\d{4}$`)
+
 func NewStockCode(code string) (StockCode, error) {
-	if code == "" {
-		return "", errors.New("stock code cannot be empty")
+	if !stockCodeRegexp.MatchString(code) {
+		return "", errors.New("stock code must be 4 digits")
 	}
 	return StockCode(code), nil
 }

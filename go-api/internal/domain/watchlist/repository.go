@@ -3,5 +3,5 @@ package watchlist
 import "context"
 
 type Repository interface {
-	FindAll(ctx context.Context) ([]Watchlist, error)
+	FindByUserID(ctx context.Context, userID int64) ([]Watchlist, error)
 }
