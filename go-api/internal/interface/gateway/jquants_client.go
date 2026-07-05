@@ -5,15 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 )
 
 type JQuantsClient struct {
-	baseURL  string
-	email    string
-	password string
-	idToken  string
+	baseURL    string
+	email      string
+	password   string
+	idToken    string
+	mu         sync.Mutex
+	httpClient *http.Client
 }
 
 func NewJQuantsClient(email, password string) *JQuantsClient {
@@ -21,7 +25,12 @@ func NewJQuantsClient(email, password string) *JQuantsClient {
 }
 
 func NewJQuantsClientWithBaseURL(email, password, baseURL string) *JQuantsClient {
-	return &JQuantsClient{baseURL: baseURL, email: email, password: password}
+	return &JQuantsClient{
+		baseURL:    baseURL,
+		email:      email,
+		password:   password,
+		httpClient: &http.Client{Timeout: 10 * time.Second},
+	}
 }
 
 func (c *JQuantsClient) FetchLatest(code stock.StockCode) (stock.Price, error) {
@@ -37,7 +46,7 @@ func (c *JQuantsClient) FetchLatest(code stock.StockCode) (stock.Price, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+c.idToken)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("fetch quotes: %w", err)
 	}
@@ -61,6 +70,8 @@ func (c *JQuantsClient) FetchLatest(code stock.StockCode) (stock.Price, error) {
 }
 
 func (c *JQuantsClient) ensureToken() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.idToken != "" {
 		return nil
 	}
@@ -69,7 +80,12 @@ func (c *JQuantsClient) ensureToken() error {
 		"mailaddress": c.email,
 		"password":    c.password,
 	})
-	resp, err := http.Post(c.baseURL+"/v1/token/auth_user", "application/json", bytes.NewReader(body))
+	req1, err := http.NewRequest(http.MethodPost, c.baseURL+"/v1/token/auth_user", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req1.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req1)
 	if err != nil {
 		return err
 	}
@@ -85,7 +101,12 @@ func (c *JQuantsClient) ensureToken() error {
 	}
 
 	body, _ = json.Marshal(map[string]string{"refreshToken": r1.RefreshToken})
-	resp2, err := http.Post(c.baseURL+"/v1/token/auth_refresh", "application/json", bytes.NewReader(body))
+	req2, err := http.NewRequest(http.MethodPost, c.baseURL+"/v1/token/auth_refresh", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req2.Header.Set("Content-Type", "application/json")
+	resp2, err := c.httpClient.Do(req2)
 	if err != nil {
 		return err
 	}

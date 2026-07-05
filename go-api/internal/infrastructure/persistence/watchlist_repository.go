@@ -19,7 +19,7 @@ func NewPgWatchlistRepository(conn *pgx.Conn) *PgWatchlistRepository {
 
 func (r *PgWatchlistRepository) FindByUserID(ctx context.Context, userID string) ([]watchlist.Watchlist, error) {
 	rows, err := r.conn.Query(ctx,
-		`SELECT id, user_id, stock_code, created_at FROM watchlist WHERE user_id = $1`,
+		`SELECT id, user_id, stock_code, alert_threshold, created_at FROM watchlist WHERE user_id = $1`,
 		userID)
 	if err != nil {
 		return nil, err
@@ -30,7 +30,7 @@ func (r *PgWatchlistRepository) FindByUserID(ctx context.Context, userID string)
 	for rows.Next() {
 		var w watchlist.Watchlist
 		var rawCode string
-		if err := rows.Scan(&w.ID, &w.UserID, &rawCode, &w.CreatedAt); err != nil {
+		if err := rows.Scan(&w.ID, &w.UserID, &rawCode, &w.AlertThreshold, &w.CreatedAt); err != nil {
 			return nil, err
 		}
 		sc, err := stock.NewStockCode(rawCode)

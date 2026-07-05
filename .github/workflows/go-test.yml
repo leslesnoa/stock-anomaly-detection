@@ -47,7 +47,7 @@ jobs:
 
       - name: Run unit tests
         working-directory: go-api
-        run: go test -short ./...
+        run: go test -race -short ./...
 
       - name: Run database migration
         run: psql $DATABASE_URL -f go-api/migrations/001_initial_schema.sql
@@ -56,7 +56,7 @@ jobs:
 
       - name: Run integration tests
         working-directory: go-api
-        run: go test ./...
+        run: go test -race ./...
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/stock_anomaly_test?sslmode=disable
           REDIS_URL: redis://localhost:6379
