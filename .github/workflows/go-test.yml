@@ -1,0 +1,66 @@
+name: Go Test
+
+on:
+  push:
+    paths:
+      - 'go-api/**'
+  pull_request:
+    paths:
+      - 'go-api/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: stock_anomaly_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+          cache-dependency-path: go-api/go.sum
+
+      - name: Run unit tests
+        working-directory: go-api
+        run: go test -short ./...
+
+      - name: Run database migration
+        run: psql $DATABASE_URL -f go-api/migrations/001_initial_schema.sql
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/stock_anomaly_test?sslmode=disable
+
+      - name: Run integration tests
+        working-directory: go-api
+        run: go test ./...
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/stock_anomaly_test?sslmode=disable
+          REDIS_URL: redis://localhost:6379
+
+      - name: Build
+        working-directory: go-api
+        run: go build ./...
