@@ -13,6 +13,7 @@ import (
 	"github.com/stock-anomaly-detection/go-api/internal/domain/anomaly"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 	"github.com/stock-anomaly-detection/go-api/internal/infrastructure/cache"
+	"github.com/stock-anomaly-detection/go-api/internal/infrastructure/persistence"
 	"github.com/stock-anomaly-detection/go-api/internal/interface/gateway"
 	"github.com/stock-anomaly-detection/go-api/internal/usecase"
 )
@@ -27,11 +28,11 @@ func main() {
 	stockCodesRaw := mustEnv("STOCK_CODES")
 
 	threshold := 2.5
-	if t := os.Getenv("ALERT_THRESHOLD"); t != "" {
+	if t := os.Getenv("ANOMALY_THRESHOLD"); t != "" {
 		var err error
 		threshold, err = strconv.ParseFloat(t, 64)
 		if err != nil {
-			log.Fatalf("invalid ALERT_THRESHOLD: %v", err)
+			log.Fatalf("invalid ANOMALY_THRESHOLD: %v", err)
 		}
 	}
 
@@ -40,6 +41,14 @@ func main() {
 		log.Fatalf("invalid REDIS_URL: %v", err)
 	}
 	redisClient := redis.NewClient(opt)
+	defer redisClient.Close()
+
+	databaseURL := mustEnv("DATABASE_URL")
+	conn, err := persistence.Connect(ctx, databaseURL)
+	if err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
+	}
+	defer conn.Close(ctx)
 
 	priceCache := cache.NewRedisPriceCache(redisClient)
 	priceFetcher := gateway.NewJQuantsClient(jQuantsEmail, jQuantsPassword)
