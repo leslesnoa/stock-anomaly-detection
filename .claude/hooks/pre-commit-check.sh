@@ -10,6 +10,13 @@ if [ -d "$ROOT/go-api" ] && command -v go >/dev/null 2>&1; then
   fi
 fi
 
+# Go build
+if [ -d "$ROOT/go-api" ] && command -v go >/dev/null 2>&1; then
+  if ! out=$(cd "$ROOT/go-api" && go build ./... 2>&1); then
+    errors="${errors}[Go build 失敗]\n${out}\n"
+  fi
+fi
+
 # Go lint
 if [ -d "$ROOT/go-api" ] && command -v golangci-lint >/dev/null 2>&1; then
   if ! out=$(cd "$ROOT/go-api" && golangci-lint run ./... 2>&1); then

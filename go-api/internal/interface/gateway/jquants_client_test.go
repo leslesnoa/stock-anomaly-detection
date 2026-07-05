@@ -12,19 +12,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func writeJSON(w http.ResponseWriter, v any) {
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 func TestJQuantsClient_FetchLatest(t *testing.T) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /v1/token/auth_user", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"refreshToken": "test-refresh"})
+		writeJSON(w, map[string]string{"refreshToken": "test-refresh"})
 	})
 	mux.HandleFunc("POST /v1/token/auth_refresh", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"idToken": "test-id-token"})
+		writeJSON(w, map[string]string{"idToken": "test-id-token"})
 	})
 	mux.HandleFunc("GET /v1/prices/daily_quotes", func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "Bearer test-id-token", r.Header.Get("Authorization"))
 		assert.Equal(t, "72030", r.URL.Query().Get("code"))
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, map[string]interface{}{
 			"daily_quotes": []map[string]interface{}{
 				{"Code": "72030", "Close": 3250.0},
 			},
@@ -45,13 +51,13 @@ func TestJQuantsClient_FetchLatest(t *testing.T) {
 func TestJQuantsClient_FetchLatest_NoData(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/token/auth_user", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"refreshToken": "r"})
+		writeJSON(w, map[string]string{"refreshToken": "r"})
 	})
 	mux.HandleFunc("POST /v1/token/auth_refresh", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"idToken": "i"})
+		writeJSON(w, map[string]string{"idToken": "i"})
 	})
 	mux.HandleFunc("GET /v1/prices/daily_quotes", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]interface{}{"daily_quotes": []interface{}{}})
+		writeJSON(w, map[string]interface{}{"daily_quotes": []interface{}{}})
 	})
 
 	srv := httptest.NewServer(mux)

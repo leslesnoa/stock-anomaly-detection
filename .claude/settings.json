@@ -58,6 +58,17 @@
             "statusMessage": "コミット前チェック（go test / golangci-lint / pytest）を実行中..."
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/watanabekeisuke/Documents/stock-anomaly-detection/.claude/hooks/branch-check.sh",
+            "timeout": 10,
+            "statusMessage": "ブランチチェック中..."
+          }
+        ]
       }
     ],
     "Stop": [
