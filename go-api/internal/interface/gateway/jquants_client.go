@@ -42,6 +42,9 @@ func (c *JQuantsClient) FetchLatest(code stock.StockCode) (stock.Price, error) {
 		return 0, fmt.Errorf("fetch quotes: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("jquants api returned status %d", resp.StatusCode)
+	}
 
 	var result struct {
 		DailyQuotes []struct {
@@ -71,6 +74,9 @@ func (c *JQuantsClient) ensureToken() error {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("jquants api returned status %d", resp.StatusCode)
+	}
 	var r1 struct {
 		RefreshToken string `json:"refreshToken"`
 	}
@@ -78,12 +84,15 @@ func (c *JQuantsClient) ensureToken() error {
 		return err
 	}
 
-	body, _ = json.Marshal(map[string]string{"refreshtoken": r1.RefreshToken})
+	body, _ = json.Marshal(map[string]string{"refreshToken": r1.RefreshToken})
 	resp2, err := http.Post(c.baseURL+"/v1/token/auth_refresh", "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
+		return fmt.Errorf("jquants api returned status %d", resp2.StatusCode)
+	}
 	var r2 struct {
 		IDToken string `json:"idToken"`
 	}
