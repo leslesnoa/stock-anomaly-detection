@@ -33,7 +33,7 @@
 ## テスト方針
 - 統合テスト: `testing.Short()` または環境変数未設定でスキップ
 - J-Quantsクライアント: `httptest.NewServer`でモック（実API呼び出しなし）
-- `-race`フラグ必須（JQuantsClientのidTokenはsync.Mutexで保護済み）
+- `-race`フラグ必須（並行安全性の確認のため）
 
 ## GitHub Actions CI
 - postgres:16 + redis:7 サービス
