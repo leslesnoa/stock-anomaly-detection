@@ -23,8 +23,7 @@ func main() {
 	defer stop()
 
 	redisURL := mustEnv("REDIS_URL")
-	jQuantsEmail := mustEnv("JQUANTS_EMAIL")
-	jQuantsPassword := mustEnv("JQUANTS_PASSWORD")
+	jQuantsAPIKey := mustEnv("JQUANTS_API_KEY")
 	stockCodesRaw := mustEnv("STOCK_CODES")
 
 	threshold := 2.5
@@ -51,7 +50,7 @@ func main() {
 	defer conn.Close(ctx)
 
 	priceCache := cache.NewRedisPriceCache(redisClient)
-	priceFetcher := gateway.NewJQuantsClient(jQuantsEmail, jQuantsPassword)
+	priceFetcher := gateway.NewJQuantsClient(jQuantsAPIKey)
 	detector := anomaly.NewDetectionService()
 	monitor := usecase.NewMonitorUsecase(priceFetcher, priceCache, detector, threshold)
 
