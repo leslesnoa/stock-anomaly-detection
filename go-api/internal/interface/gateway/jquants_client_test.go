@@ -21,18 +21,12 @@ func writeJSON(w http.ResponseWriter, v any) {
 func TestJQuantsClient_FetchLatest(t *testing.T) {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("POST /v1/token/auth_user", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]string{"refreshToken": "test-refresh"})
-	})
-	mux.HandleFunc("POST /v1/token/auth_refresh", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]string{"idToken": "test-id-token"})
-	})
-	mux.HandleFunc("GET /v1/prices/daily_quotes", func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "Bearer test-id-token", r.Header.Get("Authorization"))
+	mux.HandleFunc("GET /v2/equities/bars/daily", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "test-api-key", r.Header.Get("x-api-key"))
 		assert.Equal(t, "72030", r.URL.Query().Get("code"))
 		writeJSON(w, map[string]interface{}{
-			"daily_quotes": []map[string]interface{}{
-				{"Code": "72030", "Close": 3250.0},
+			"data": []map[string]interface{}{
+				{"C": 3250.0},
 			},
 		})
 	})
@@ -40,7 +34,7 @@ func TestJQuantsClient_FetchLatest(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	client := gateway.NewJQuantsClientWithBaseURL("test@example.com", "pass", srv.URL)
+	client := gateway.NewJQuantsClientWithBaseURL("test-api-key", srv.URL)
 	code, _ := stock.NewStockCode("7203")
 
 	price, err := client.FetchLatest(code)
@@ -50,20 +44,14 @@ func TestJQuantsClient_FetchLatest(t *testing.T) {
 
 func TestJQuantsClient_FetchLatest_NoData(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/token/auth_user", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]string{"refreshToken": "r"})
-	})
-	mux.HandleFunc("POST /v1/token/auth_refresh", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]string{"idToken": "i"})
-	})
-	mux.HandleFunc("GET /v1/prices/daily_quotes", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]interface{}{"daily_quotes": []interface{}{}})
+	mux.HandleFunc("GET /v2/equities/bars/daily", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]interface{}{"data": []interface{}{}})
 	})
 
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	client := gateway.NewJQuantsClientWithBaseURL("e", "p", srv.URL)
+	client := gateway.NewJQuantsClientWithBaseURL("key", srv.URL)
 	code, _ := stock.NewStockCode("0000")
 	_, err := client.FetchLatest(code)
 	require.Error(t, err)

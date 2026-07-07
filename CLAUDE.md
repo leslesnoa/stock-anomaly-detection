@@ -27,12 +27,13 @@
 - DBスキーマ: UUID PK（`gen_random_uuid()`）、`int64`不使用
 - `WatchlistRepository.FindByUserID(ctx, userID string)` — userIDはUUID文字列
 - Redisキー: `price:<4桁コード>`、スライディングウィンドウ30件
-- J-Quants APIコード: 4桁→5桁（末尾0追加）、JSON key: `"refreshToken"`（camelCase）
+- J-Quants API V2: 認証は `x-api-key` ヘッダー、エンドポイント `/v2/equities/bars/daily`、レスポンス `data[].C`（終値）
+- J-Quants APIコード: 4桁→5桁（末尾0追加）
 
 ## テスト方針
 - 統合テスト: `testing.Short()` または環境変数未設定でスキップ
 - J-Quantsクライアント: `httptest.NewServer`でモック（実API呼び出しなし）
-- `-race`フラグ必須（JQuantsClientのidTokenはsync.Mutexで保護済み）
+- `-race`フラグ必須（並行安全性の確認のため）
 
 ## GitHub Actions CI
 - postgres:16 + redis:7 サービス
@@ -40,4 +41,4 @@
 - `REDIS_URL: redis://localhost:6379`
 
 ## 環境変数（本番）
-DATABASE_URL, REDIS_URL, JQUANTS_EMAIL, JQUANTS_PASSWORD, STOCK_CODES（カンマ区切り4桁コード）, ANOMALY_THRESHOLD（デフォルト2.5）
+DATABASE_URL, REDIS_URL, JQUANTS_API_KEY, STOCK_CODES（カンマ区切り4桁コード）, ANOMALY_THRESHOLD（デフォルト2.5）
