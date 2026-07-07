@@ -71,8 +71,8 @@ func main() {
 		log.Fatal("no valid stock codes in STOCK_CODES")
 	}
 
-	log.Printf("monitoring %d stocks (threshold=%.1fσ)", len(codes), threshold)
-	monitor.StartMonitoring(ctx, codes)
+	log.Printf("monitoring %d stocks (threshold=%.1fσ, poll=16:00 JST)", len(codes), threshold)
+	monitor.StartMonitoring(ctx, codes, 16, 0)
 	log.Println("monitoring stopped")
 }
 

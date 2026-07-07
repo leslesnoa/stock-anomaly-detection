@@ -13,6 +13,20 @@ import (
 
 const historySize = 30
 
+// jst は日本市場の実行時刻計算に使う固定タイムゾーン（夏時間なし）。
+var jst = time.FixedZone("JST", 9*60*60)
+
+// nextPollTime は now 以降で最初に来る JST hour:minute の時刻を返す。
+// now がちょうど実行時刻の場合は翌日を返す。
+func nextPollTime(now time.Time, hour, minute int) time.Time {
+	n := now.In(jst)
+	next := time.Date(n.Year(), n.Month(), n.Day(), hour, minute, 0, 0, jst)
+	if !next.After(n) {
+		next = next.Add(24 * time.Hour)
+	}
+	return next
+}
+
 type MonitorUsecase struct {
 	fetcher   stock.PriceFetcher
 	cache     stock.PriceCache
@@ -81,20 +95,21 @@ func (u *MonitorUsecase) CheckStock(ctx context.Context, code stock.StockCode) (
 }
 
 // StartMonitoring はgoroutineで全銘柄を並行監視する。
+// 各銘柄は毎日 JST hour:minute（大引け後の想定）に1回チェックする。
 // ctx がキャンセルされるまでブロックする。
-func (u *MonitorUsecase) StartMonitoring(ctx context.Context, codes []stock.StockCode) {
+func (u *MonitorUsecase) StartMonitoring(ctx context.Context, codes []stock.StockCode, hour, minute int) {
 	var wg sync.WaitGroup
 	for _, code := range codes {
 		wg.Add(1)
 		go func(code stock.StockCode) {
 			defer wg.Done()
-			ticker := time.NewTicker(1 * time.Minute)
-			defer ticker.Stop()
 			for {
+				timer := time.NewTimer(time.Until(nextPollTime(time.Now(), hour, minute)))
 				select {
 				case <-ctx.Done():
+					timer.Stop()
 					return
-				case <-ticker.C:
+				case <-timer.C:
 					detected, z, err := u.CheckStock(ctx, code)
 					if err != nil {
 						log.Printf("ERROR monitoring %s: %v", code, err)
