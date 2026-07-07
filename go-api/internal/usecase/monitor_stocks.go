@@ -37,12 +37,12 @@ func NewMonitorUsecase(
 // CheckStock は1銘柄の価格を取得・キャッシュし、Z-scoreを計算して異常判定する。
 // 履歴が30件未満の場合は detected=false を返す（ウォームアップ期間）。
 func (u *MonitorUsecase) CheckStock(ctx context.Context, code stock.StockCode) (bool, anomaly.ZScore, error) {
-	price, err := u.fetcher.FetchLatest(code)
+	quote, err := u.fetcher.FetchLatest(code)
 	if err != nil {
 		return false, 0, fmt.Errorf("fetch %s: %w", code, err)
 	}
 
-	if err := u.cache.Push(code, price); err != nil {
+	if err := u.cache.Push(code, quote.Price); err != nil {
 		return false, 0, fmt.Errorf("cache push %s: %w", code, err)
 	}
 

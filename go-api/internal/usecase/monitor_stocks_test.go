@@ -14,9 +14,9 @@ import (
 
 type MockPriceFetcher struct{ mock.Mock }
 
-func (m *MockPriceFetcher) FetchLatest(code stock.StockCode) (stock.Price, error) {
+func (m *MockPriceFetcher) FetchLatest(code stock.StockCode) (stock.Quote, error) {
 	args := m.Called(code)
-	return args.Get(0).(stock.Price), args.Error(1)
+	return args.Get(0).(stock.Quote), args.Error(1)
 }
 
 type MockPriceCache struct{ mock.Mock }
@@ -48,7 +48,7 @@ func TestMonitorUsecase_CheckStock_DetectsAnomaly(t *testing.T) {
 	}
 	allPrices := append(history, stock.Price(130))
 
-	fetcher.On("FetchLatest", code).Return(stock.Price(130.0), nil)
+	fetcher.On("FetchLatest", code).Return(stock.Quote{Price: 130.0, Date: "2026-07-07"}, nil)
 	priceCache.On("Push", code, stock.Price(130.0)).Return(nil)
 	priceCache.On("GetHistory", code, 30).Return(allPrices, nil)
 
@@ -69,7 +69,7 @@ func TestMonitorUsecase_CheckStock_InsufficientHistory(t *testing.T) {
 	priceCache := &MockPriceCache{}
 
 	code, _ := stock.NewStockCode("6758")
-	fetcher.On("FetchLatest", code).Return(stock.Price(5000.0), nil)
+	fetcher.On("FetchLatest", code).Return(stock.Quote{Price: 5000.0, Date: "2026-07-07"}, nil)
 	priceCache.On("Push", code, stock.Price(5000.0)).Return(nil)
 	// 30件未満（5件）を返す → 検知しない
 	priceCache.On("GetHistory", code, 30).Return([]stock.Price{5000, 5010, 4990, 5005, 5000}, nil)
