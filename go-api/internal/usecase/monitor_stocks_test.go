@@ -58,6 +58,8 @@ func TestMonitorUsecase_CheckStock_DetectsAnomaly(t *testing.T) {
 	allPrices := append(history, stock.Price(130))
 
 	fetcher.On("FetchLatest", code).Return(stock.Quote{Price: 130.0, Date: "2026-07-07"}, nil)
+	priceCache.On("LastDate", code).Return("2026-07-06", nil)
+	priceCache.On("SetLastDate", code, "2026-07-07").Return(nil)
 	priceCache.On("Push", code, stock.Price(130.0)).Return(nil)
 	priceCache.On("GetHistory", code, 30).Return(allPrices, nil)
 
@@ -79,6 +81,8 @@ func TestMonitorUsecase_CheckStock_InsufficientHistory(t *testing.T) {
 
 	code, _ := stock.NewStockCode("6758")
 	fetcher.On("FetchLatest", code).Return(stock.Quote{Price: 5000.0, Date: "2026-07-07"}, nil)
+	priceCache.On("LastDate", code).Return("2026-07-06", nil)
+	priceCache.On("SetLastDate", code, "2026-07-07").Return(nil)
 	priceCache.On("Push", code, stock.Price(5000.0)).Return(nil)
 	// 30件未満（5件）を返す → 検知しない
 	priceCache.On("GetHistory", code, 30).Return([]stock.Price{5000, 5010, 4990, 5005, 5000}, nil)
@@ -89,4 +93,27 @@ func TestMonitorUsecase_CheckStock_InsufficientHistory(t *testing.T) {
 	detected, _, err := uc.CheckStock(context.Background(), code)
 	require.NoError(t, err)
 	assert.False(t, detected, "insufficient history should not trigger detection")
+}
+
+func TestMonitorUsecase_CheckStock_SkipsDuplicateDate(t *testing.T) {
+	fetcher := &MockPriceFetcher{}
+	priceCache := &MockPriceCache{}
+
+	code, _ := stock.NewStockCode("7203")
+	// 取得したバーの取引日が、直近取り込み済みの取引日と同じ
+	fetcher.On("FetchLatest", code).Return(stock.Quote{Price: 3250.0, Date: "2026-07-07"}, nil)
+	priceCache.On("LastDate", code).Return("2026-07-07", nil)
+
+	svc := anomaly.NewDetectionService()
+	uc := usecase.NewMonitorUsecase(fetcher, priceCache, svc, 2.5)
+
+	detected, _, err := uc.CheckStock(context.Background(), code)
+	require.NoError(t, err)
+	assert.False(t, detected, "duplicate trading date must not be pushed")
+
+	// Push / SetLastDate / GetHistory は呼ばれない
+	priceCache.AssertNotCalled(t, "Push", code, stock.Price(3250.0))
+	priceCache.AssertNotCalled(t, "SetLastDate", code, "2026-07-07")
+	priceCache.AssertNotCalled(t, "GetHistory", code, 30)
+	fetcher.AssertExpectations(t)
 }

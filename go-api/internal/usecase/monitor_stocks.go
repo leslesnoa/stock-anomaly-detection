@@ -42,8 +42,20 @@ func (u *MonitorUsecase) CheckStock(ctx context.Context, code stock.StockCode) (
 		return false, 0, fmt.Errorf("fetch %s: %w", code, err)
 	}
 
+	lastDate, err := u.cache.LastDate(code)
+	if err != nil {
+		return false, 0, fmt.Errorf("last date %s: %w", code, err)
+	}
+	// 同一取引日は既に取り込み済み。重複を積むと標準偏差が歪むため Push しない。
+	if quote.Date == lastDate {
+		return false, 0, nil
+	}
+
 	if err := u.cache.Push(code, quote.Price); err != nil {
 		return false, 0, fmt.Errorf("cache push %s: %w", code, err)
+	}
+	if err := u.cache.SetLastDate(code, quote.Date); err != nil {
+		return false, 0, fmt.Errorf("set last date %s: %w", code, err)
 	}
 
 	prices, err := u.cache.GetHistory(code, historySize)
