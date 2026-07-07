@@ -29,6 +29,25 @@ func (c *RedisPriceCache) Push(code stock.StockCode, price stock.Price) error {
 	return err
 }
 
+func (c *RedisPriceCache) LastDate(code stock.StockCode) (string, error) {
+	ctx := context.Background()
+	key := fmt.Sprintf("lastdate:%s", code)
+	v, err := c.client.Get(ctx, key).Result()
+	if err == redis.Nil {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return v, nil
+}
+
+func (c *RedisPriceCache) SetLastDate(code stock.StockCode, date string) error {
+	ctx := context.Background()
+	key := fmt.Sprintf("lastdate:%s", code)
+	return c.client.Set(ctx, key, date, 0).Err()
+}
+
 func (c *RedisPriceCache) GetHistory(code stock.StockCode, n int) ([]stock.Price, error) {
 	ctx := context.Background()
 	key := fmt.Sprintf("price:%s", code)

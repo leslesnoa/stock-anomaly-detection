@@ -30,6 +30,15 @@ func (m *MockPriceCache) GetHistory(code stock.StockCode, n int) ([]stock.Price,
 	return args.Get(0).([]stock.Price), args.Error(1)
 }
 
+func (m *MockPriceCache) LastDate(code stock.StockCode) (string, error) {
+	args := m.Called(code)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockPriceCache) SetLastDate(code stock.StockCode, date string) error {
+	return m.Called(code, date).Error(0)
+}
+
 func TestMonitorUsecase_CheckStock_DetectsAnomaly(t *testing.T) {
 	fetcher := &MockPriceFetcher{}
 	priceCache := &MockPriceCache{}
