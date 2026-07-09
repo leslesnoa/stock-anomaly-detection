@@ -47,6 +47,37 @@ func TestRedisPriceCache_PushAndGetHistory(t *testing.T) {
 	assert.Equal(t, stock.Price(3270.0), prices[2])
 }
 
+func TestRedisPriceCache_LastDate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		t.Skip("REDIS_URL not set")
+	}
+
+	opt, err := redis.ParseURL(redisURL)
+	require.NoError(t, err)
+	client := redis.NewClient(opt)
+	defer client.Close()
+
+	ctx := context.Background()
+	c := cache.NewRedisPriceCache(client)
+	code, _ := stock.NewStockCode("7203")
+	client.Del(ctx, "lastdate:7203")
+
+	// 未設定なら空文字
+	d, err := c.LastDate(code)
+	require.NoError(t, err)
+	assert.Equal(t, "", d)
+
+	// セットして読み戻す
+	require.NoError(t, c.SetLastDate(code, "2026-07-07"))
+	d, err = c.LastDate(code)
+	require.NoError(t, err)
+	assert.Equal(t, "2026-07-07", d)
+}
+
 func TestRedisPriceCache_MaxHistory30(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

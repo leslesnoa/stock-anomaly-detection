@@ -20,3 +20,8 @@ func (s StockCode) String() string { return string(s) }
 
 type Price float64
 type Volume int64
+
+type Quote struct {
+	Price Price
+	Date  string
+}

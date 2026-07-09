@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -32,6 +33,15 @@ func main() {
 		threshold, err = strconv.ParseFloat(t, 64)
 		if err != nil {
 			log.Fatalf("invalid ANOMALY_THRESHOLD: %v", err)
+		}
+	}
+
+	pollHour, pollMinute := 16, 0
+	if pt := os.Getenv("POLL_TIME"); pt != "" {
+		var err error
+		pollHour, pollMinute, err = parsePollTime(pt)
+		if err != nil {
+			log.Fatalf("invalid POLL_TIME: %v", err)
 		}
 	}
 
@@ -71,8 +81,8 @@ func main() {
 		log.Fatal("no valid stock codes in STOCK_CODES")
 	}
 
-	log.Printf("monitoring %d stocks (threshold=%.1fσ)", len(codes), threshold)
-	monitor.StartMonitoring(ctx, codes)
+	log.Printf("monitoring %d stocks (threshold=%.1fσ, poll=%02d:%02d JST)", len(codes), threshold, pollHour, pollMinute)
+	monitor.StartMonitoring(ctx, codes, pollHour, pollMinute)
 	log.Println("monitoring stopped")
 }
 
@@ -82,4 +92,19 @@ func mustEnv(key string) string {
 		log.Fatalf("required env %s is not set", key)
 	}
 	return v
+}
+
+// parsePollTime は "HH:MM"（24時間表記）を時・分に分解する。
+// %s で余剰入力を捕まえ、"16:0:0" のような不正形式を厳密に弾く。
+func parsePollTime(s string) (int, int, error) {
+	var hour, minute int
+	var rest string
+	n, _ := fmt.Sscanf(s, "%d:%d%s", &hour, &minute, &rest)
+	if n < 2 || rest != "" {
+		return 0, 0, fmt.Errorf("POLL_TIME must be HH:MM, got %q", s)
+	}
+	if hour < 0 || hour > 23 || minute < 0 || minute > 59 {
+		return 0, 0, fmt.Errorf("POLL_TIME out of range: %q", s)
+	}
+	return hour, minute, nil
 }
