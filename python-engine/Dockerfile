@@ -5,10 +5,13 @@ WORKDIR /app
 # uv バイナリを公式イメージからコピー
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+# システムPythonを使用するよう設定
+ENV UV_SYSTEM_PYTHON=1
+
 # 依存解決（ソースコードより先にコピーしてレイヤーキャッシュを活かす）
-COPY python-engine/pyproject.toml python-engine/uv.lock* ./
-RUN uv pip compile -o requirements.txt pyproject.toml && \
-    uv pip install --system -r requirements.txt
+# uv.lock を使用した再現可能なビルド
+COPY python-engine/pyproject.toml python-engine/uv.lock ./
+RUN uv sync --no-dev --frozen
 
 # アプリケーションコードをコピー
 COPY python-engine/app/ ./app/
