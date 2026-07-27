@@ -12,9 +12,9 @@ if [ -d "$ROOT/go-api" ] && command -v golangci-lint >/dev/null 2>&1; then
   fi
 fi
 
-# Python lint
-if [ -d "$ROOT/python-engine" ] && command -v ruff >/dev/null 2>&1; then
-  if out=$(cd "$ROOT/python-engine" && ruff check . 2>&1); then
+# Python lint (ruff)
+if [ -d "$ROOT/python-engine" ] && command -v uv >/dev/null 2>&1; then
+  if out=$(cd "$ROOT/python-engine" && uv run ruff check . 2>&1); then
     msg="${msg}[Python lint] クリア\n"
   else
     msg="${msg}[Python lint 警告]\n${out}\n"

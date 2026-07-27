@@ -1,5 +1,5 @@
 #!/bin/bash
-# コミット前ゲート: go test + golangci-lint + pytest を実行し、失敗時にコミットをブロックする
+# コミット前ゲート: go test + golangci-lint + ruff + pytest を実行し、失敗時にコミットをブロックする
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 errors=""
 
@@ -24,10 +24,17 @@ if [ -d "$ROOT/go-api" ] && command -v golangci-lint >/dev/null 2>&1; then
   fi
 fi
 
+# Python lint (ruff)
+if [ -d "$ROOT/python-engine" ] && command -v uv >/dev/null 2>&1; then
+  if ! out=$(cd "$ROOT/python-engine" && uv run ruff check . 2>&1); then
+    errors="${errors}[Python ruff lint 失敗]\n${out}\n"
+  fi
+fi
+
 # Python test
-if [ -d "$ROOT/python-engine" ] && command -v pytest >/dev/null 2>&1; then
-  if ! out=$(cd "$ROOT/python-engine" && python -m pytest 2>&1); then
-    errors="${errors}[pytest 失敗]\n${out}\n"
+if [ -d "$ROOT/python-engine" ] && command -v uv >/dev/null 2>&1; then
+  if ! out=$(cd "$ROOT/python-engine" && uv run pytest 2>&1); then
+    errors="${errors}[Python pytest 失敗]\n${out}\n"
   fi
 fi
 
