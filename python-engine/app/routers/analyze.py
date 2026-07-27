@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends
-from app.dependencies import get_analysis_service
+from fastapi import APIRouter
 from app.schemas import AnalyzeRequest, AnalyzeResponse
-from app.services.analysis import AnalysisService
+from app.services.indicators import calculate_indicators
 
 router = APIRouter()
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
-def analyze(req: AnalyzeRequest, svc: AnalysisService = Depends(get_analysis_service)) -> AnalyzeResponse:
-    return svc.analyze(req)
+def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
+    indicators = calculate_indicators(req.prices)
+    return AnalyzeResponse(stock_code=req.stock_code, indicators=indicators)

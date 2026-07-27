@@ -33,13 +33,6 @@ class Indicators(BaseModel):
     bollinger: BollingerValue
 
 
-class NewsItem(BaseModel):
-    title: str
-    url: str
-    published_at: str
-
-
 class AnalyzeResponse(BaseModel):
     stock_code: str
     indicators: Indicators
-    news: list[NewsItem]
