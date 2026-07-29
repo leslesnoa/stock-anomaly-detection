@@ -5,7 +5,6 @@ from app.main import app
 
 @pytest.fixture(scope="module")
 def client():
-    # lifespan が実行される。FINNHUB_API_KEY 未設定 → MockNewsClient 使用
     with TestClient(app) as c:
         yield c
 
@@ -26,7 +25,7 @@ def test_analyze_success(client):
     assert "rsi" in body["indicators"]
     assert "macd" in body["indicators"]
     assert "bollinger" in body["indicators"]
-    assert isinstance(body["news"], list)
+    assert "news" not in body
 
 
 def test_analyze_returns_rsi_float(client):
@@ -51,7 +50,7 @@ def test_analyze_too_few_prices_returns_422(client):
             "stock_code": "7203",
             "z_score": 3.2,
             "current_price": 3250.0,
-            "prices": [3000.0] * 13,  # 13件 < 14件
+            "prices": [3000.0] * 13,
         },
     )
     assert response.status_code == 422
