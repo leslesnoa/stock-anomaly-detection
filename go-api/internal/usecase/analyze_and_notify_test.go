@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/analysis"
@@ -112,7 +113,12 @@ func TestAnalyzeAndNotifyUsecase_Handle_ClaudeFailure_FallsBackToIndicatorsOnly(
 	analyzer.On("Analyze", code, 3.2, 3250.0, mock.Anything).Return(indicators, nil)
 	reportGen.On("GenerateReport", mock.Anything).Return("", assert.AnError)
 	notif.On("Send", mock.MatchedBy(func(msg string) bool {
-		return msg != "" // フォールバックメッセージが送信される
+		// フォールバックメッセージには指標由来の内容（RSI値）が含まれ、
+		// Claude失敗時の空文字列やAI分析結果テキストが紛れ込んでいないことを検証する。
+		return strings.Contains(msg, "RSI") &&
+			strings.Contains(msg, "65.30") &&
+			strings.Contains(msg, "テクニカル指標のみ通知") &&
+			!strings.Contains(msg, "AI分析結果")
 	})).Return(nil)
 	repo.On("Save", mock.Anything, mock.Anything).Return(nil)
 
