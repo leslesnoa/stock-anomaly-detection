@@ -3,12 +3,17 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
 const claudeMaxTokens = 300
+
+// claudeRequestTimeout は1リクエストあたりのタイムアウト。GenerateReportは
+// 失敗時に最大1回リトライするため、最悪ケースでも約30秒（15秒×2）で完了する。
+const claudeRequestTimeout = 15 * time.Second
 
 type ClaudeClient struct {
 	client anthropic.Client
@@ -19,14 +24,14 @@ func NewClaudeClient(apiKey, model string) *ClaudeClient {
 	return &ClaudeClient{
 		// SDK側の自動リトライ（デフォルト2回）を無効化し、GenerateReportの
 		// 「1回だけリトライする」という仕様どおりの回数でリクエストする。
-		client: anthropic.NewClient(option.WithAPIKey(apiKey), option.WithMaxRetries(0)),
+		client: anthropic.NewClient(option.WithAPIKey(apiKey), option.WithMaxRetries(0), option.WithRequestTimeout(claudeRequestTimeout)),
 		model:  model,
 	}
 }
 
 func NewClaudeClientWithBaseURL(apiKey, baseURL, model string) *ClaudeClient {
 	return &ClaudeClient{
-		client: anthropic.NewClient(option.WithAPIKey(apiKey), option.WithBaseURL(baseURL), option.WithMaxRetries(0)),
+		client: anthropic.NewClient(option.WithAPIKey(apiKey), option.WithBaseURL(baseURL), option.WithMaxRetries(0), option.WithRequestTimeout(claudeRequestTimeout)),
 		model:  model,
 	}
 }
