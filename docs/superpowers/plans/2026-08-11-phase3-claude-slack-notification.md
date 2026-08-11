@@ -6,11 +6,11 @@
 
 **Architecture:** `MonitorUsecase`が異常を検知したら新設の`AnalyzeAndNotifyUsecase`を呼び出す。`AnalyzeAndNotifyUsecase`はニュース取得（Finnhub gateway）・テクニカル指標計算（Python engine gateway）・AIレポート生成（Claude API gateway）・Slack通知（Slack gateway）を順に実行し、結果を`notifications`テーブル（Phase1で作成済み）に保存する。各外部依存はdomain層に定義したインターフェース経由でusecaseから参照する既存パターン（`stock.PriceFetcher`/`stock.PriceCache`と同様）を踏襲する。
 
-**Tech Stack:** Go 1.22, `github.com/anthropics/anthropic-sdk-go`（Claude API公式Go SDK）, 標準ライブラリ`net/http`（Finnhub・Slack・Python engine呼び出し）, `github.com/jackc/pgx/v5`（通知履歴永続化）
+**Tech Stack:** Go 1.24, `github.com/anthropics/anthropic-sdk-go`（Claude API公式Go SDK）, 標準ライブラリ`net/http`（Finnhub・Slack・Python engine呼び出し）, `github.com/jackc/pgx/v5`（通知履歴永続化）
 
 ## Global Constraints
 
-- Goモジュール: `github.com/stock-anomaly-detection/go-api`（`go-api/`内で操作、go 1.22）
+- Goモジュール: `github.com/stock-anomaly-detection/go-api`（`go-api/`内で操作、go 1.24。Task 4でClaude公式Go SDK追加に伴いgo.mod・CIともに1.22→1.24へ更新済み）
 - `go test -race -short ./...` は外部サービス不要（単体テスト。gatewayは`httptest`でモック）
 - `go test -race ./...` は `DATABASE_URL` + `REDIS_URL` が必要（統合テスト）
 - Clean Architecture依存ルール: `domain`は外部依存ゼロ、`usecase`は`domain`のみに依存、`interface`/`infrastructure`は`usecase`と`domain`に依存
