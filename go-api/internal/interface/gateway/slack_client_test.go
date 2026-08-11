@@ -44,3 +44,20 @@ func TestSlackClient_Send_RetriesThreeTimesThenFails(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, 3, callCount)
 }
+
+func TestSlackClient_Send_TransportErrorDoesNotLeakWebhookURL(t *testing.T) {
+	// Start a server and close it immediately so requests fail at the
+	// transport level (connection refused), not with an HTTP status code.
+	srv := httptest.NewServer(http.NewServeMux())
+	webhookURL := srv.URL + "/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
+	srv.Close()
+
+	client := gateway.NewSlackClient(webhookURL)
+	err := client.Send("異常検知: 7203")
+	require.Error(t, err)
+
+	errMsg := err.Error()
+	assert.NotContains(t, errMsg, webhookURL, "error must not leak the full webhook URL")
+	assert.NotContains(t, errMsg, "/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX", "error must not leak the webhook secret path")
+	assert.NotEmpty(t, errMsg)
+}
