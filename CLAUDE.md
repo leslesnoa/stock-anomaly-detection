@@ -29,6 +29,8 @@
 - Redisキー: `price:<4桁コード>`、スライディングウィンドウ30件
 - J-Quants API V2: 認証は `x-api-key` ヘッダー、エンドポイント `/v2/equities/bars/daily`、レスポンス `data[].C`（終値）
 - J-Quants APIコード: 4桁→5桁（末尾0追加）
+- Phase 3: ニュース取得はGo側（`gateway.FinnhubClient`）で実施。異常検知時に `AnalyzeAndNotifyUsecase` が ニュース取得→Pythonエンジン(`/analyze`)→Claude API→Slack通知→`notifications`テーブル保存の順に実行する
+- Claude APIはリトライ1回、失敗時はテクニカル指標のみのSlack通知にフォールバック。Slack通知は最大3回リトライ、失敗時も`slack_sent=false`で通知履歴を保存する
 
 ## テスト方針
 - 統合テスト: `testing.Short()` または環境変数未設定でスキップ
@@ -41,4 +43,4 @@
 - `REDIS_URL: redis://localhost:6379`
 
 ## 環境変数（本番）
-DATABASE_URL, REDIS_URL, JQUANTS_API_KEY, STOCK_CODES（カンマ区切り4桁コード）, ANOMALY_THRESHOLD（デフォルト2.5）
+DATABASE_URL, REDIS_URL, JQUANTS_API_KEY, STOCK_CODES（カンマ区切り4桁コード）, ANOMALY_THRESHOLD（デフォルト2.5）, FINNHUB_API_KEY, ANTHROPIC_API_KEY, SLACK_WEBHOOK_URL, PYTHON_ENGINE_URL, CLAUDE_MODEL（デフォルト claude-opus-5）
