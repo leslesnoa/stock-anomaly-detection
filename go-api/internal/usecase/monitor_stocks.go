@@ -28,10 +28,11 @@ func nextPollTime(now time.Time, hour, minute int) time.Time {
 }
 
 type MonitorUsecase struct {
-	fetcher   stock.PriceFetcher
-	cache     stock.PriceCache
-	detector  *anomaly.DetectionService
-	threshold float64
+	fetcher       stock.PriceFetcher
+	cache         stock.PriceCache
+	detector      *anomaly.DetectionService
+	threshold     float64
+	notifyUsecase *AnalyzeAndNotifyUsecase
 }
 
 func NewMonitorUsecase(
@@ -39,12 +40,14 @@ func NewMonitorUsecase(
 	cache stock.PriceCache,
 	detector *anomaly.DetectionService,
 	threshold float64,
+	notifyUsecase *AnalyzeAndNotifyUsecase,
 ) *MonitorUsecase {
 	return &MonitorUsecase{
-		fetcher:   fetcher,
-		cache:     cache,
-		detector:  detector,
-		threshold: threshold,
+		fetcher:       fetcher,
+		cache:         cache,
+		detector:      detector,
+		threshold:     threshold,
+		notifyUsecase: notifyUsecase,
 	}
 }
 
@@ -94,6 +97,27 @@ func (u *MonitorUsecase) CheckStock(ctx context.Context, code stock.StockCode) (
 	return z.IsAnomaly(u.threshold), z, nil
 }
 
+// notify は異常検知後、AnalyzeAndNotifyUsecase が設定されていれば
+// 直近の価格履歴を取得してAI分析・Slack通知パイプラインを起動する。
+func (u *MonitorUsecase) notify(ctx context.Context, code stock.StockCode, z anomaly.ZScore) {
+	if u.notifyUsecase == nil {
+		return
+	}
+	prices, err := u.cache.GetHistory(code, historySize)
+	if err != nil || len(prices) == 0 {
+		log.Printf("ERROR fetch history for notify %s: %v", code, err)
+		return
+	}
+	floatPrices := make([]float64, len(prices))
+	for i, p := range prices {
+		floatPrices[i] = float64(p)
+	}
+	currentPrice := floatPrices[len(floatPrices)-1]
+	if err := u.notifyUsecase.Handle(ctx, code, float64(z), currentPrice, floatPrices); err != nil {
+		log.Printf("ERROR analyze and notify %s: %v", code, err)
+	}
+}
+
 // StartMonitoring はgoroutineで全銘柄を並行監視する。
 // 各銘柄は毎日 JST hour:minute（大引け後の想定）に1回チェックする。
 // ctx がキャンセルされるまでブロックする。
@@ -117,6 +141,7 @@ func (u *MonitorUsecase) StartMonitoring(ctx context.Context, codes []stock.Stoc
 					}
 					if detected {
 						log.Printf("ANOMALY %s z=%.2f (threshold=%.1f)", code, z, u.threshold)
+						u.notify(ctx, code, z)
 					}
 				}
 			}

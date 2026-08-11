@@ -62,7 +62,7 @@ func main() {
 	priceCache := cache.NewRedisPriceCache(redisClient)
 	priceFetcher := gateway.NewJQuantsClient(jQuantsAPIKey)
 	detector := anomaly.NewDetectionService()
-	monitor := usecase.NewMonitorUsecase(priceFetcher, priceCache, detector, threshold)
+	monitor := usecase.NewMonitorUsecase(priceFetcher, priceCache, detector, threshold, nil)
 
 	var codes []stock.StockCode
 	for _, s := range strings.Split(stockCodesRaw, ",") {

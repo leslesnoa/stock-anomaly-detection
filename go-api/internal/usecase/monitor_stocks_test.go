@@ -64,7 +64,7 @@ func TestMonitorUsecase_CheckStock_DetectsAnomaly(t *testing.T) {
 	priceCache.On("GetHistory", code, 30).Return(allPrices, nil)
 
 	svc := anomaly.NewDetectionService()
-	uc := usecase.NewMonitorUsecase(fetcher, priceCache, svc, 2.5)
+	uc := usecase.NewMonitorUsecase(fetcher, priceCache, svc, 2.5, nil)
 
 	detected, zScore, err := uc.CheckStock(context.Background(), code)
 	require.NoError(t, err)
@@ -88,7 +88,7 @@ func TestMonitorUsecase_CheckStock_InsufficientHistory(t *testing.T) {
 	priceCache.On("GetHistory", code, 30).Return([]stock.Price{5000, 5010, 4990, 5005, 5000}, nil)
 
 	svc := anomaly.NewDetectionService()
-	uc := usecase.NewMonitorUsecase(fetcher, priceCache, svc, 2.5)
+	uc := usecase.NewMonitorUsecase(fetcher, priceCache, svc, 2.5, nil)
 
 	detected, _, err := uc.CheckStock(context.Background(), code)
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestMonitorUsecase_CheckStock_SkipsDuplicateDate(t *testing.T) {
 	priceCache.On("LastDate", code).Return("2026-07-07", nil)
 
 	svc := anomaly.NewDetectionService()
-	uc := usecase.NewMonitorUsecase(fetcher, priceCache, svc, 2.5)
+	uc := usecase.NewMonitorUsecase(fetcher, priceCache, svc, 2.5, nil)
 
 	detected, _, err := uc.CheckStock(context.Background(), code)
 	require.NoError(t, err)
