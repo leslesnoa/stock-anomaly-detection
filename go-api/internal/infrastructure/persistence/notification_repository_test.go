@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stock-anomaly-detection/go-api/internal/domain/analysis"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/notification"
 	"github.com/stock-anomaly-detection/go-api/internal/infrastructure/persistence"
 	"github.com/stretchr/testify/require"
@@ -27,11 +28,12 @@ func TestPgNotificationRepository_Save(t *testing.T) {
 	require.NoError(t, err)
 
 	repo := persistence.NewPgNotificationRepository(conn)
+	rsi := 65.5
 	n := notification.Notification{
 		StockCode:           "7203",
 		AnomalyScore:        3.2,
 		AIReport:            "テストレポート",
-		TechnicalIndicators: `{"rsi":65.5}`,
+		TechnicalIndicators: analysis.Indicators{RSI: &rsi},
 		SlackSent:           true,
 	}
 	err = repo.Save(ctx, n)

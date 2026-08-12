@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -69,16 +68,11 @@ func (u *AnalyzeAndNotifyUsecase) Handle(ctx context.Context, code stock.StockCo
 		slackSent = false
 	}
 
-	indicatorsJSON, err := json.Marshal(indicators)
-	if err != nil {
-		return fmt.Errorf("marshal indicators: %w", err)
-	}
-
 	n := notification.Notification{
 		StockCode:           code.String(),
 		AnomalyScore:        zScore,
 		AIReport:            report,
-		TechnicalIndicators: string(indicatorsJSON),
+		TechnicalIndicators: indicators,
 		SlackSent:           slackSent,
 	}
 	if err := u.notifications.Save(ctx, n); err != nil {
