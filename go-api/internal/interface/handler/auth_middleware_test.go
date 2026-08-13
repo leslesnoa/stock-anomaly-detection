@@ -1,11 +1,10 @@
-package handler_test
+package handler
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stock-anomaly-detection/go-api/internal/interface/handler"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,7 +19,7 @@ func (s stubTokenVerifier) VerifyToken(token string) (string, error) {
 
 func TestRequireAuth_MissingHeader(t *testing.T) {
 	next := func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }
-	mw := handler.RequireAuth(stubTokenVerifier{}, next)
+	mw := RequireAuth(stubTokenVerifier{}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/watchlist", nil)
 	rec := httptest.NewRecorder()
@@ -31,7 +30,7 @@ func TestRequireAuth_MissingHeader(t *testing.T) {
 
 func TestRequireAuth_InvalidToken(t *testing.T) {
 	next := func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }
-	mw := handler.RequireAuth(stubTokenVerifier{err: assert.AnError}, next)
+	mw := RequireAuth(stubTokenVerifier{err: assert.AnError}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/watchlist", nil)
 	req.Header.Set("Authorization", "Bearer bad-token")
@@ -43,11 +42,14 @@ func TestRequireAuth_InvalidToken(t *testing.T) {
 
 func TestRequireAuth_Success(t *testing.T) {
 	called := false
+	var gotUserID string
+	var gotOK bool
 	next := func(w http.ResponseWriter, r *http.Request) {
 		called = true
+		gotUserID, gotOK = userIDFromContext(r.Context())
 		w.WriteHeader(http.StatusOK)
 	}
-	mw := handler.RequireAuth(stubTokenVerifier{userID: "user-1"}, next)
+	mw := RequireAuth(stubTokenVerifier{userID: "user-1"}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/watchlist", nil)
 	req.Header.Set("Authorization", "Bearer good-token")
@@ -56,4 +58,6 @@ func TestRequireAuth_Success(t *testing.T) {
 
 	assert.True(t, called)
 	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, gotOK)
+	assert.Equal(t, "user-1", gotUserID)
 }
