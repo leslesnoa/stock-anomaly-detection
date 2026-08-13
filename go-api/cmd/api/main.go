@@ -26,6 +26,15 @@ func main() {
 	redisURL := mustEnv("REDIS_URL")
 	jQuantsAPIKey := mustEnv("JQUANTS_API_KEY")
 	stockCodesRaw := mustEnv("STOCK_CODES")
+	finnhubAPIKey := mustEnv("FINNHUB_API_KEY")
+	anthropicAPIKey := mustEnv("ANTHROPIC_API_KEY")
+	slackWebhookURL := mustEnv("SLACK_WEBHOOK_URL")
+	pythonEngineURL := mustEnv("PYTHON_ENGINE_URL")
+
+	claudeModel := "claude-opus-5"
+	if m := os.Getenv("CLAUDE_MODEL"); m != "" {
+		claudeModel = m
+	}
 
 	threshold := 2.5
 	if t := os.Getenv("ANOMALY_THRESHOLD"); t != "" {
@@ -61,8 +70,14 @@ func main() {
 
 	priceCache := cache.NewRedisPriceCache(redisClient)
 	priceFetcher := gateway.NewJQuantsClient(jQuantsAPIKey)
+	newsClient := gateway.NewFinnhubClient(finnhubAPIKey)
+	pythonEngineClient := gateway.NewPythonEngineClient(pythonEngineURL)
+	claudeClient := gateway.NewClaudeClient(anthropicAPIKey, claudeModel)
+	slackClient := gateway.NewSlackClient(slackWebhookURL)
+	notificationRepo := persistence.NewPgNotificationRepository(conn)
+	notifyUsecase := usecase.NewAnalyzeAndNotifyUsecase(newsClient, pythonEngineClient, claudeClient, slackClient, notificationRepo)
 	detector := anomaly.NewDetectionService()
-	monitor := usecase.NewMonitorUsecase(priceFetcher, priceCache, detector, threshold)
+	monitor := usecase.NewMonitorUsecase(priceFetcher, priceCache, detector, threshold, notifyUsecase)
 
 	var codes []stock.StockCode
 	for _, s := range strings.Split(stockCodesRaw, ",") {
