@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"github.com/stock-anomaly-detection/go-api/internal/infrastructure/cache"
 	"github.com/stock-anomaly-detection/go-api/internal/infrastructure/persistence"
 	"github.com/stock-anomaly-detection/go-api/internal/interface/gateway"
+	"github.com/stock-anomaly-detection/go-api/internal/interface/handler"
 	"github.com/stock-anomaly-detection/go-api/internal/usecase"
 )
 
@@ -30,6 +32,12 @@ func main() {
 	anthropicAPIKey := mustEnv("ANTHROPIC_API_KEY")
 	slackWebhookURL := mustEnv("SLACK_WEBHOOK_URL")
 	pythonEngineURL := mustEnv("PYTHON_ENGINE_URL")
+	jwtSecret := mustEnv("JWT_SECRET")
+
+	port := "8080"
+	if p := os.Getenv("PORT"); p != "" {
+		port = p
+	}
 
 	claudeModel := "claude-opus-5"
 	if m := os.Getenv("CLAUDE_MODEL"); m != "" {
@@ -78,6 +86,33 @@ func main() {
 	notifyUsecase := usecase.NewAnalyzeAndNotifyUsecase(newsClient, pythonEngineClient, claudeClient, slackClient, notificationRepo)
 	detector := anomaly.NewDetectionService()
 	monitor := usecase.NewMonitorUsecase(priceFetcher, priceCache, detector, threshold, notifyUsecase)
+
+	userRepo := persistence.NewPgUserRepository(conn)
+	watchlistRepo := persistence.NewPgWatchlistRepository(conn)
+	hasher := gateway.NewBcryptHasher()
+	tokenService := gateway.NewJWTTokenService(jwtSecret)
+
+	registerUsecase := usecase.NewRegisterUserUsecase(userRepo, hasher)
+	loginUsecase := usecase.NewLoginUserUsecase(userRepo, hasher, tokenService)
+	watchlistUsecase := usecase.NewManageWatchlistUsecase(watchlistRepo)
+
+	authHandler := handler.NewAuthHandler(registerUsecase, loginUsecase)
+	watchlistHandler := handler.NewWatchlistHandler(watchlistUsecase)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /auth/register", authHandler.Register)
+	mux.HandleFunc("POST /auth/login", authHandler.Login)
+	mux.HandleFunc("GET /watchlist", handler.RequireAuth(tokenService, watchlistHandler.List))
+	mux.HandleFunc("POST /watchlist", handler.RequireAuth(tokenService, watchlistHandler.Add))
+	mux.HandleFunc("DELETE /watchlist/{id}", handler.RequireAuth(tokenService, watchlistHandler.Remove))
+	mux.HandleFunc("PATCH /watchlist/{id}", handler.RequireAuth(tokenService, watchlistHandler.UpdateThreshold))
+
+	go func() {
+		log.Printf("http server listening on :%s", port)
+		if err := http.ListenAndServe(":"+port, mux); err != nil {
+			log.Printf("ERROR http server: %v", err)
+		}
+	}()
 
 	var codes []stock.StockCode
 	for _, s := range strings.Split(stockCodesRaw, ",") {
