@@ -6,7 +6,9 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/watchlist"
+	"github.com/stock-anomaly-detection/go-api/internal/usecase"
 )
 
 type watchlistUsecase interface {
@@ -74,8 +76,10 @@ func (h *WatchlistHandler) Add(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusCreated, toWatchlistItemResponse(item))
 	case errors.Is(err, watchlist.ErrAlreadyExists):
 		writeError(w, http.StatusConflict, err.Error())
-	default:
+	case errors.Is(err, stock.ErrInvalidStockCode):
 		writeError(w, http.StatusBadRequest, err.Error())
+	default:
+		writeError(w, http.StatusInternalServerError, "internal server error")
 	}
 }
 
@@ -119,6 +123,8 @@ func (h *WatchlistHandler) UpdateThreshold(w http.ResponseWriter, r *http.Reques
 		w.WriteHeader(http.StatusOK)
 	case errors.Is(err, watchlist.ErrNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
+	case errors.Is(err, usecase.ErrInvalidThreshold):
+		writeError(w, http.StatusBadRequest, err.Error())
 	default:
 		writeError(w, http.StatusInternalServerError, "internal server error")
 	}
