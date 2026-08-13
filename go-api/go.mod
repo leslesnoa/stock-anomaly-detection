@@ -1,11 +1,11 @@
 module github.com/stock-anomaly-detection/go-api
 
-go 1.25.0
+go 1.24.0
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.62.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/jackc/pgx/v5 v5.10.0
+	github.com/jackc/pgx/v5 v5.8.0
 	github.com/redis/go-redis/v9 v9.6.1
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.40.0
