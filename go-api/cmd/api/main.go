@@ -70,11 +70,11 @@ func main() {
 	defer redisClient.Close()
 
 	databaseURL := mustEnv("DATABASE_URL")
-	conn, err := persistence.Connect(ctx, databaseURL)
+	pool, err := persistence.Connect(ctx, databaseURL)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
-	defer conn.Close(ctx)
+	defer pool.Close()
 
 	priceCache := cache.NewRedisPriceCache(redisClient)
 	priceFetcher := gateway.NewJQuantsClient(jQuantsAPIKey)
@@ -82,13 +82,13 @@ func main() {
 	pythonEngineClient := gateway.NewPythonEngineClient(pythonEngineURL)
 	claudeClient := gateway.NewClaudeClient(anthropicAPIKey, claudeModel)
 	slackClient := gateway.NewSlackClient(slackWebhookURL)
-	notificationRepo := persistence.NewPgNotificationRepository(conn)
+	notificationRepo := persistence.NewPgNotificationRepository(pool)
 	notifyUsecase := usecase.NewAnalyzeAndNotifyUsecase(newsClient, pythonEngineClient, claudeClient, slackClient, notificationRepo)
 	detector := anomaly.NewDetectionService()
 	monitor := usecase.NewMonitorUsecase(priceFetcher, priceCache, detector, threshold, notifyUsecase)
 
-	userRepo := persistence.NewPgUserRepository(conn)
-	watchlistRepo := persistence.NewPgWatchlistRepository(conn)
+	userRepo := persistence.NewPgUserRepository(pool)
+	watchlistRepo := persistence.NewPgWatchlistRepository(pool)
 	hasher := gateway.NewBcryptHasher()
 	tokenService := gateway.NewJWTTokenService(jwtSecret)
 

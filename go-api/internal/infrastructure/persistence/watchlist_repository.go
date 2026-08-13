@@ -5,17 +5,17 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/watchlist"
 )
 
 type PgWatchlistRepository struct {
-	conn *pgx.Conn
+	conn *pgxpool.Pool
 }
 
-func NewPgWatchlistRepository(conn *pgx.Conn) *PgWatchlistRepository {
+func NewPgWatchlistRepository(conn *pgxpool.Pool) *PgWatchlistRepository {
 	return &PgWatchlistRepository{conn: conn}
 }
 

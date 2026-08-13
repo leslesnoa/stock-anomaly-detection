@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/watchlist"
 	"github.com/stock-anomaly-detection/go-api/internal/infrastructure/persistence"
@@ -24,7 +24,7 @@ func TestPgWatchlistRepository_FindByUserID_Empty(t *testing.T) {
 	ctx := context.Background()
 	conn, err := persistence.Connect(ctx, databaseURL)
 	require.NoError(t, err)
-	defer conn.Close(ctx)
+	defer conn.Close()
 
 	_, err = conn.Exec(ctx, "TRUNCATE watchlist CASCADE")
 	require.NoError(t, err)
@@ -36,7 +36,7 @@ func TestPgWatchlistRepository_FindByUserID_Empty(t *testing.T) {
 	assert.IsType(t, []watchlist.Watchlist{}, watchlists)
 }
 
-func insertTestUser(t *testing.T, ctx context.Context, conn *pgx.Conn, email string) string {
+func insertTestUser(t *testing.T, ctx context.Context, conn *pgxpool.Pool, email string) string {
 	t.Helper()
 	var id string
 	err := conn.QueryRow(ctx,
@@ -58,7 +58,7 @@ func TestPgWatchlistRepository_CreateAndFindByUserID(t *testing.T) {
 	ctx := context.Background()
 	conn, err := persistence.Connect(ctx, databaseURL)
 	require.NoError(t, err)
-	defer conn.Close(ctx)
+	defer conn.Close()
 	_, err = conn.Exec(ctx, "TRUNCATE watchlist, users CASCADE")
 	require.NoError(t, err)
 
@@ -89,7 +89,7 @@ func TestPgWatchlistRepository_Create_Duplicate(t *testing.T) {
 	ctx := context.Background()
 	conn, err := persistence.Connect(ctx, databaseURL)
 	require.NoError(t, err)
-	defer conn.Close(ctx)
+	defer conn.Close()
 	_, err = conn.Exec(ctx, "TRUNCATE watchlist, users CASCADE")
 	require.NoError(t, err)
 
@@ -115,7 +115,7 @@ func TestPgWatchlistRepository_Delete(t *testing.T) {
 	ctx := context.Background()
 	conn, err := persistence.Connect(ctx, databaseURL)
 	require.NoError(t, err)
-	defer conn.Close(ctx)
+	defer conn.Close()
 	_, err = conn.Exec(ctx, "TRUNCATE watchlist, users CASCADE")
 	require.NoError(t, err)
 
@@ -149,7 +149,7 @@ func TestPgWatchlistRepository_UpdateThreshold(t *testing.T) {
 	ctx := context.Background()
 	conn, err := persistence.Connect(ctx, databaseURL)
 	require.NoError(t, err)
-	defer conn.Close(ctx)
+	defer conn.Close()
 	_, err = conn.Exec(ctx, "TRUNCATE watchlist, users CASCADE")
 	require.NoError(t, err)
 

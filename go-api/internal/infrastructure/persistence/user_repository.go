@@ -6,16 +6,17 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/user"
 )
 
 const uniqueViolationCode = "23505"
 
 type PgUserRepository struct {
-	conn *pgx.Conn
+	conn *pgxpool.Pool
 }
 
-func NewPgUserRepository(conn *pgx.Conn) *PgUserRepository {
+func NewPgUserRepository(conn *pgxpool.Pool) *PgUserRepository {
 	return &PgUserRepository{conn: conn}
 }
 

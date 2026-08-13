@@ -22,7 +22,7 @@ func TestPgNotificationRepository_Save(t *testing.T) {
 	ctx := context.Background()
 	conn, err := persistence.Connect(ctx, databaseURL)
 	require.NoError(t, err)
-	defer conn.Close(ctx)
+	defer conn.Close()
 
 	_, err = conn.Exec(ctx, "TRUNCATE notifications CASCADE")
 	require.NoError(t, err)

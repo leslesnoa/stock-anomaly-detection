@@ -25,7 +25,7 @@ func setupUserTestDB(t *testing.T) (context.Context, *persistence.PgUserReposito
 	require.NoError(t, err)
 	_, err = conn.Exec(ctx, "TRUNCATE users CASCADE")
 	require.NoError(t, err)
-	return ctx, persistence.NewPgUserRepository(conn), func() { conn.Close(ctx) }
+	return ctx, persistence.NewPgUserRepository(conn), func() { conn.Close() }
 }
 
 func TestPgUserRepository_CreateAndFindByEmail(t *testing.T) {
