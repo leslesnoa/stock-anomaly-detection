@@ -2,12 +2,15 @@ package usecase
 
 import (
 	"context"
+	"errors"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/watchlist"
 )
 
 const defaultAlertThreshold = 2.5
+
+var ErrInvalidThreshold = errors.New("alert threshold must be positive")
 
 type ManageWatchlistUsecase struct {
 	watchlists watchlist.Repository
@@ -37,6 +40,9 @@ func (u *ManageWatchlistUsecase) Remove(ctx context.Context, userID, watchlistID
 }
 
 func (u *ManageWatchlistUsecase) UpdateThreshold(ctx context.Context, userID, watchlistID string, threshold float64) error {
+	if threshold <= 0 {
+		return ErrInvalidThreshold
+	}
 	return u.watchlists.UpdateThreshold(ctx, watchlistID, userID, threshold)
 }
 
