@@ -91,3 +91,8 @@ export async function updateThresholdAction(
   revalidatePath("/watchlist");
   return { ok: true };
 }
+
+export async function logoutAction(): Promise<void> {
+  await clearSessionToken();
+  redirect("/login");
+}

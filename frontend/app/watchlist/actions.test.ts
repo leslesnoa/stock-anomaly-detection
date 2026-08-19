@@ -182,3 +182,18 @@ describe("updateThresholdAction", () => {
     expect(result).toEqual({ ok: false, error: "invalid threshold" });
   });
 });
+
+describe("logoutAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("clears the session cookie and redirects to /login", async () => {
+    const { logoutAction } = await import("./actions");
+
+    await logoutAction();
+
+    expect(session.clearSessionToken).toHaveBeenCalled();
+    expect(redirect).toHaveBeenCalledWith("/login");
+  });
+});
