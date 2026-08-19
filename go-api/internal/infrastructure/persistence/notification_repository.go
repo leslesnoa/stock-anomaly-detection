@@ -5,15 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/notification"
 )
 
 type PgNotificationRepository struct {
-	conn *pgx.Conn
+	conn *pgxpool.Pool
 }
 
-func NewPgNotificationRepository(conn *pgx.Conn) *PgNotificationRepository {
+func NewPgNotificationRepository(conn *pgxpool.Pool) *PgNotificationRepository {
 	return &PgNotificationRepository{conn: conn}
 }
 

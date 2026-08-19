@@ -9,9 +9,11 @@ type StockCode string
 
 var stockCodeRegexp = regexp.MustCompile(`^\d{4}$`)
 
+var ErrInvalidStockCode = errors.New("stock code must be 4 digits")
+
 func NewStockCode(code string) (StockCode, error) {
 	if !stockCodeRegexp.MatchString(code) {
-		return "", errors.New("stock code must be 4 digits")
+		return "", ErrInvalidStockCode
 	}
 	return StockCode(code), nil
 }
