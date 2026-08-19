@@ -20,6 +20,6 @@ describe("WatchlistTable", () => {
   it("renders nothing in the body when items is empty", () => {
     render(<WatchlistTable items={[]} />);
 
-    expect(screen.queryByRole("row", { name: /./ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("row")).toHaveLength(1);
   });
 });

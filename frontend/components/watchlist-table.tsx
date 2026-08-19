@@ -9,10 +9,6 @@ import {
 } from "@/components/ui/table";
 
 export function WatchlistTable({ items }: { items: WatchlistItem[] }) {
-  if (items.length === 0) {
-    return null;
-  }
-
   return (
     <Table>
       <TableHeader>
