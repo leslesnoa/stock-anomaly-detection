@@ -12,9 +12,17 @@ vi.mock("next/cache", () => ({
 }));
 vi.mock("@/lib/go-api-client", () => ({
   addWatchlistItem: vi.fn(),
+  removeWatchlistItem: vi.fn(),
+  updateWatchlistThreshold: vi.fn(),
 }));
 
-import { requireToken, redirectIfUnauthorized, addAction } from "./actions";
+import {
+  requireToken,
+  redirectIfUnauthorized,
+  addAction,
+  removeAction,
+  updateThresholdAction,
+} from "./actions";
 import * as session from "@/lib/session";
 import * as goApiClient from "@/lib/go-api-client";
 import { redirect } from "next/navigation";
@@ -116,5 +124,61 @@ describe("addAction", () => {
 
     expect(session.clearSessionToken).toHaveBeenCalled();
     expect(redirect).toHaveBeenCalledWith("/login");
+  });
+});
+
+describe("removeAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(session.getSessionToken).mockResolvedValue("jwt-token");
+  });
+
+  it("returns ok and revalidates /watchlist on success", async () => {
+    vi.mocked(goApiClient.removeWatchlistItem).mockResolvedValue({ ok: true });
+
+    const result = await removeAction("1");
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("returns the error message when the API call fails", async () => {
+    vi.mocked(goApiClient.removeWatchlistItem).mockResolvedValue({
+      ok: false,
+      error: "watchlist item not found",
+      status: 404,
+    });
+
+    const result = await removeAction("1");
+
+    expect(result).toEqual({ ok: false, error: "watchlist item not found" });
+  });
+});
+
+describe("updateThresholdAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(session.getSessionToken).mockResolvedValue("jwt-token");
+  });
+
+  it("returns ok on success", async () => {
+    vi.mocked(goApiClient.updateWatchlistThreshold).mockResolvedValue({
+      ok: true,
+    });
+
+    const result = await updateThresholdAction("1", 3.0);
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("returns the error message when the API call fails", async () => {
+    vi.mocked(goApiClient.updateWatchlistThreshold).mockResolvedValue({
+      ok: false,
+      error: "invalid threshold",
+      status: 400,
+    });
+
+    const result = await updateThresholdAction("1", -1);
+
+    expect(result).toEqual({ ok: false, error: "invalid threshold" });
   });
 });

@@ -2,7 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { addWatchlistItem, type ApiFailure } from "@/lib/go-api-client";
+import {
+  addWatchlistItem,
+  removeWatchlistItem,
+  updateWatchlistThreshold,
+  type ApiFailure,
+} from "@/lib/go-api-client";
 import { getSessionToken, clearSessionToken } from "@/lib/session";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -43,6 +48,41 @@ export async function addAction(
     tokenResult.token,
     stockCode,
     Number(alertThreshold),
+  );
+  if (!result.ok) {
+    await redirectIfUnauthorized(result);
+    return { ok: false, error: result.error };
+  }
+  revalidatePath("/watchlist");
+  return { ok: true };
+}
+
+export async function removeAction(id: string): Promise<ActionResult> {
+  const tokenResult = await requireToken();
+  if (!tokenResult.ok) {
+    return tokenResult;
+  }
+  const result = await removeWatchlistItem(tokenResult.token, id);
+  if (!result.ok) {
+    await redirectIfUnauthorized(result);
+    return { ok: false, error: result.error };
+  }
+  revalidatePath("/watchlist");
+  return { ok: true };
+}
+
+export async function updateThresholdAction(
+  id: string,
+  alertThreshold: number,
+): Promise<ActionResult> {
+  const tokenResult = await requireToken();
+  if (!tokenResult.ok) {
+    return tokenResult;
+  }
+  const result = await updateWatchlistThreshold(
+    tokenResult.token,
+    id,
+    alertThreshold,
   );
   if (!result.ok) {
     await redirectIfUnauthorized(result);
