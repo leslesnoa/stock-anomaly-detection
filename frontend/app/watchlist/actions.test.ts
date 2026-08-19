@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/session", () => ({
-  getSessionToken: vi.fn(),
   clearSessionToken: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
@@ -15,10 +14,12 @@ vi.mock("@/lib/go-api-client", () => ({
   removeWatchlistItem: vi.fn(),
   updateWatchlistThreshold: vi.fn(),
 }));
+vi.mock("@/lib/auth", () => ({
+  requireToken: vi.fn(),
+  redirectIfUnauthorized: vi.fn(),
+}));
 
 import {
-  requireToken,
-  redirectIfUnauthorized,
   addAction,
   removeAction,
   updateThresholdAction,
@@ -26,6 +27,7 @@ import {
 } from "./actions";
 import * as session from "@/lib/session";
 import * as goApiClient from "@/lib/go-api-client";
+import * as auth from "@/lib/auth";
 import { redirect } from "next/navigation";
 
 function watchlistFormData(stockCode: string, threshold: string): FormData {
@@ -35,60 +37,13 @@ function watchlistFormData(stockCode: string, threshold: string): FormData {
   return fd;
 }
 
-describe("requireToken", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("returns the token when a session cookie exists", async () => {
-    vi.mocked(session.getSessionToken).mockResolvedValue("jwt-token");
-
-    const result = await requireToken();
-
-    expect(result).toEqual({ ok: true, token: "jwt-token" });
-  });
-
-  it("returns an error when no session cookie exists", async () => {
-    vi.mocked(session.getSessionToken).mockResolvedValue(undefined);
-
-    const result = await requireToken();
-
-    expect(result).toEqual({ ok: false, error: "unauthorized" });
-  });
-});
-
-describe("redirectIfUnauthorized", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("clears the session and redirects on a 401 failure", async () => {
-    await redirectIfUnauthorized({
-      ok: false,
-      error: "missing user context",
-      status: 401,
-    });
-
-    expect(session.clearSessionToken).toHaveBeenCalled();
-    expect(redirect).toHaveBeenCalledWith("/login");
-  });
-
-  it("does nothing on a non-401 failure", async () => {
-    await redirectIfUnauthorized({
-      ok: false,
-      error: "internal server error",
-      status: 500,
-    });
-
-    expect(session.clearSessionToken).not.toHaveBeenCalled();
-    expect(redirect).not.toHaveBeenCalled();
-  });
-});
-
 describe("addAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(session.getSessionToken).mockResolvedValue("jwt-token");
+    vi.mocked(auth.requireToken).mockResolvedValue({
+      ok: true,
+      token: "jwt-token",
+    });
   });
 
   it("returns ok on success", async () => {
@@ -114,24 +69,27 @@ describe("addAction", () => {
     expect(result).toEqual({ ok: false, error: "stock already in watchlist" });
   });
 
-  it("redirects to /login when the API call returns 401", async () => {
-    vi.mocked(goApiClient.addWatchlistItem).mockResolvedValue({
-      ok: false,
+  it("calls redirectIfUnauthorized when the API call returns 401", async () => {
+    const failure = {
+      ok: false as const,
       error: "missing user context",
       status: 401,
-    });
+    };
+    vi.mocked(goApiClient.addWatchlistItem).mockResolvedValue(failure);
 
     await addAction(null, watchlistFormData("7203", "2.5"));
 
-    expect(session.clearSessionToken).toHaveBeenCalled();
-    expect(redirect).toHaveBeenCalledWith("/login");
+    expect(auth.redirectIfUnauthorized).toHaveBeenCalledWith(failure);
   });
 });
 
 describe("removeAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(session.getSessionToken).mockResolvedValue("jwt-token");
+    vi.mocked(auth.requireToken).mockResolvedValue({
+      ok: true,
+      token: "jwt-token",
+    });
   });
 
   it("returns ok and revalidates /watchlist on success", async () => {
@@ -153,12 +111,28 @@ describe("removeAction", () => {
 
     expect(result).toEqual({ ok: false, error: "watchlist item not found" });
   });
+
+  it("calls redirectIfUnauthorized when the API call returns 401", async () => {
+    const failure = {
+      ok: false as const,
+      error: "missing user context",
+      status: 401,
+    };
+    vi.mocked(goApiClient.removeWatchlistItem).mockResolvedValue(failure);
+
+    await removeAction("1");
+
+    expect(auth.redirectIfUnauthorized).toHaveBeenCalledWith(failure);
+  });
 });
 
 describe("updateThresholdAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(session.getSessionToken).mockResolvedValue("jwt-token");
+    vi.mocked(auth.requireToken).mockResolvedValue({
+      ok: true,
+      token: "jwt-token",
+    });
   });
 
   it("returns ok on success", async () => {
@@ -181,6 +155,19 @@ describe("updateThresholdAction", () => {
     const result = await updateThresholdAction("1", -1);
 
     expect(result).toEqual({ ok: false, error: "invalid threshold" });
+  });
+
+  it("calls redirectIfUnauthorized when the API call returns 401", async () => {
+    const failure = {
+      ok: false as const,
+      error: "missing user context",
+      status: 401,
+    };
+    vi.mocked(goApiClient.updateWatchlistThreshold).mockResolvedValue(failure);
+
+    await updateThresholdAction("1", 3.0);
+
+    expect(auth.redirectIfUnauthorized).toHaveBeenCalledWith(failure);
   });
 });
 

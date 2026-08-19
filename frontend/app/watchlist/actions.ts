@@ -6,30 +6,15 @@ import {
   addWatchlistItem,
   removeWatchlistItem,
   updateWatchlistThreshold,
-  type ApiFailure,
 } from "@/lib/go-api-client";
-import { getSessionToken, clearSessionToken } from "@/lib/session";
+import { clearSessionToken } from "@/lib/session";
+import {
+  requireToken,
+  redirectIfUnauthorized,
+  type ActionResult,
+} from "@/lib/auth";
 
-export type ActionResult = { ok: true } | { ok: false; error: string };
-
-export async function requireToken(): Promise<
-  { ok: true; token: string } | { ok: false; error: string }
-> {
-  const token = await getSessionToken();
-  if (!token) {
-    return { ok: false, error: "unauthorized" };
-  }
-  return { ok: true, token };
-}
-
-export async function redirectIfUnauthorized(
-  result: ApiFailure,
-): Promise<void> {
-  if (result.status === 401) {
-    await clearSessionToken();
-    redirect("/login");
-  }
-}
+export type { ActionResult } from "@/lib/auth";
 
 export async function addAction(
   _prevState: ActionResult | null,

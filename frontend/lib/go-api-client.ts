@@ -12,7 +12,16 @@ export type ApiFailure = {
 
 type ApiErrorBody = { error: string };
 
-const GO_API_URL = process.env.GO_API_URL ?? "http://localhost:8080";
+const GO_API_URL = (() => {
+  const url = process.env.GO_API_URL;
+  if (!url) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("GO_API_URL must be set in production");
+    }
+    return "http://localhost:8080";
+  }
+  return url;
+})();
 
 async function toFailure(res: Response): Promise<ApiFailure> {
   const body = (await res.json()) as ApiErrorBody;

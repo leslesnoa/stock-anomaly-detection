@@ -3,7 +3,7 @@ import { fetchWatchlist } from "@/lib/go-api-client";
 import { WatchlistTable } from "@/components/watchlist-table";
 import { AddWatchlistForm } from "@/components/add-watchlist-form";
 import { LogoutButton } from "@/components/logout-button";
-import { requireToken, redirectIfUnauthorized } from "./actions";
+import { requireToken } from "@/lib/auth";
 
 export default async function WatchlistPage() {
   const tokenResult = await requireToken();
@@ -13,7 +13,9 @@ export default async function WatchlistPage() {
 
   const result = await fetchWatchlist(tokenResult.token);
   if (!result.ok) {
-    await redirectIfUnauthorized(result);
+    if (result.status === 401) {
+      redirect("/logout");
+    }
     throw new Error(result.error);
   }
 
