@@ -1,6 +1,6 @@
 #!/bin/bash
-# コミット前ゲート: go test + golangci-lint + ruff + pytest を実行し、失敗時にコミットをブロックする
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# コミット前ゲート: go test + golangci-lint + ruff + pytest + frontend lint/test を実行し、失敗時にコミットをブロックする
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "$0")/../.." && pwd))"
 errors=""
 
 # Go test
@@ -35,6 +35,20 @@ fi
 if [ -d "$ROOT/python-engine" ] && command -v uv >/dev/null 2>&1; then
   if ! out=$(cd "$ROOT/python-engine" && uv run pytest 2>&1); then
     errors="${errors}[Python pytest 失敗]\n${out}\n"
+  fi
+fi
+
+# Frontend lint
+if [ -d "$ROOT/frontend" ] && command -v npm >/dev/null 2>&1; then
+  if ! out=$(cd "$ROOT/frontend" && npm run lint 2>&1); then
+    errors="${errors}[Frontend lint 失敗]\n${out}\n"
+  fi
+fi
+
+# Frontend test
+if [ -d "$ROOT/frontend" ] && command -v npm >/dev/null 2>&1; then
+  if ! out=$(cd "$ROOT/frontend" && npm test 2>&1); then
+    errors="${errors}[Frontend test 失敗]\n${out}\n"
   fi
 fi
 
