@@ -22,6 +22,7 @@ import {
   addAction,
   removeAction,
   updateThresholdAction,
+  logoutAction,
 } from "./actions";
 import * as session from "@/lib/session";
 import * as goApiClient from "@/lib/go-api-client";
@@ -189,8 +190,6 @@ describe("logoutAction", () => {
   });
 
   it("clears the session cookie and redirects to /login", async () => {
-    const { logoutAction } = await import("./actions");
-
     await logoutAction();
 
     expect(session.clearSessionToken).toHaveBeenCalled();
