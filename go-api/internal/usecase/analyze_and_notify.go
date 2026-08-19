@@ -86,7 +86,7 @@ func buildPrompt(code stock.StockCode, zScore, currentPrice float64, indicators 
 	if len(items) > 0 {
 		var sb strings.Builder
 		for _, item := range items {
-			sb.WriteString(fmt.Sprintf("- %s: %s\n", item.Headline, item.Summary))
+			fmt.Fprintf(&sb, "- %s: %s\n", item.Headline, item.Summary)
 		}
 		newsSummary = sb.String()
 	}

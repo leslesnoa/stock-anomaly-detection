@@ -43,7 +43,7 @@ func (c *SlackClient) Send(message string) error {
 			lastErr = sanitizeURLError(err)
 			continue
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
 			return nil
 		}
