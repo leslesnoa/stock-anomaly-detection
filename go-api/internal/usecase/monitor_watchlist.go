@@ -33,6 +33,7 @@ func (u *MonitorUsecase) RunWithDynamicWatchlist(
 		var childCtx context.Context
 		childCtx, cancel = context.WithCancel(ctx)
 		currentCodes = codes
+		log.Printf("watchlist monitoring: %d stocks %v", len(codes), codes)
 		if len(codes) == 0 {
 			return
 		}
