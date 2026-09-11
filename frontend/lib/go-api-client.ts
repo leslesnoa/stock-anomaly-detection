@@ -76,7 +76,6 @@ export async function fetchWatchlist(
 export async function addWatchlistItem(
   token: string,
   stockCode: string,
-  alertThreshold: number,
 ): Promise<{ ok: true; item: WatchlistItem } | ApiFailure> {
   const res = await fetch(`${GO_API_URL}/watchlist`, {
     method: "POST",
@@ -84,10 +83,7 @@ export async function addWatchlistItem(
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      stock_code: stockCode,
-      alert_threshold: alertThreshold,
-    }),
+    body: JSON.stringify({ stock_code: stockCode }),
   });
   if (res.status === 201) {
     const item = (await res.json()) as WatchlistItem;
@@ -105,25 +101,6 @@ export async function removeWatchlistItem(
     headers: { Authorization: `Bearer ${token}` },
   });
   if (res.status === 204) {
-    return { ok: true };
-  }
-  return toFailure(res);
-}
-
-export async function updateWatchlistThreshold(
-  token: string,
-  id: string,
-  alertThreshold: number,
-): Promise<{ ok: true } | ApiFailure> {
-  const res = await fetch(`${GO_API_URL}/watchlist/${id}`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ alert_threshold: alertThreshold }),
-  });
-  if (res.status === 200) {
     return { ok: true };
   }
   return toFailure(res);

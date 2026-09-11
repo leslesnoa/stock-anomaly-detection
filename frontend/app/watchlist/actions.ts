@@ -2,11 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import {
-  addWatchlistItem,
-  removeWatchlistItem,
-  updateWatchlistThreshold,
-} from "@/lib/go-api-client";
+import { addWatchlistItem, removeWatchlistItem } from "@/lib/go-api-client";
 import { clearSessionToken } from "@/lib/session";
 import {
   requireToken,
@@ -25,15 +21,10 @@ export async function addAction(
     return tokenResult;
   }
   const stockCode = formData.get("stock_code");
-  const alertThreshold = formData.get("alert_threshold");
-  if (typeof stockCode !== "string" || typeof alertThreshold !== "string") {
+  if (typeof stockCode !== "string") {
     return { ok: false, error: "invalid form data" };
   }
-  const result = await addWatchlistItem(
-    tokenResult.token,
-    stockCode,
-    Number(alertThreshold),
-  );
+  const result = await addWatchlistItem(tokenResult.token, stockCode);
   if (!result.ok) {
     await redirectIfUnauthorized(result);
     return { ok: false, error: result.error };
@@ -48,27 +39,6 @@ export async function removeAction(id: string): Promise<ActionResult> {
     return tokenResult;
   }
   const result = await removeWatchlistItem(tokenResult.token, id);
-  if (!result.ok) {
-    await redirectIfUnauthorized(result);
-    return { ok: false, error: result.error };
-  }
-  revalidatePath("/watchlist");
-  return { ok: true };
-}
-
-export async function updateThresholdAction(
-  id: string,
-  alertThreshold: number,
-): Promise<ActionResult> {
-  const tokenResult = await requireToken();
-  if (!tokenResult.ok) {
-    return tokenResult;
-  }
-  const result = await updateWatchlistThreshold(
-    tokenResult.token,
-    id,
-    alertThreshold,
-  );
   if (!result.ok) {
     await redirectIfUnauthorized(result);
     return { ok: false, error: result.error };

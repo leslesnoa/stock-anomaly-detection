@@ -4,13 +4,12 @@ import { WatchlistTable } from "./watchlist-table";
 
 vi.mock("@/app/watchlist/actions", () => ({
   removeAction: vi.fn(),
-  updateThresholdAction: vi.fn(),
 }));
 
 import * as actions from "@/app/watchlist/actions";
 
 describe("WatchlistTable", () => {
-  it("renders each watchlist item's stock code and threshold", () => {
+  it("renders each watchlist item's stock code", () => {
     render(
       <WatchlistTable
         items={[
@@ -48,23 +47,6 @@ describe("WatchlistTable row actions", () => {
 
     await waitFor(() => {
       expect(actions.removeAction).toHaveBeenCalledWith("1");
-    });
-  });
-
-  it("calls updateThresholdAction with the new value on blur", async () => {
-    vi.mocked(actions.updateThresholdAction).mockResolvedValue({ ok: true });
-
-    render(
-      <WatchlistTable
-        items={[{ id: "1", stock_code: "7203", alert_threshold: 2.5 }]}
-      />,
-    );
-    const input = screen.getByDisplayValue("2.5");
-    fireEvent.change(input, { target: { value: "3" } });
-    fireEvent.blur(input);
-
-    await waitFor(() => {
-      expect(actions.updateThresholdAction).toHaveBeenCalledWith("1", 3);
     });
   });
 });
