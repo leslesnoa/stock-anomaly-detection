@@ -9,13 +9,11 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/anomaly"
-	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 	"github.com/stock-anomaly-detection/go-api/internal/infrastructure/cache"
 	"github.com/stock-anomaly-detection/go-api/internal/infrastructure/persistence"
 	"github.com/stock-anomaly-detection/go-api/internal/interface/gateway"
@@ -23,13 +21,14 @@ import (
 	"github.com/stock-anomaly-detection/go-api/internal/usecase"
 )
 
+const watchlistRefreshInterval = 5 * time.Minute
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	redisURL := mustEnv("REDIS_URL")
 	jQuantsAPIKey := mustEnv("JQUANTS_API_KEY")
-	stockCodesRaw := mustEnv("STOCK_CODES")
 	finnhubAPIKey := mustEnv("FINNHUB_API_KEY")
 	anthropicAPIKey := mustEnv("ANTHROPIC_API_KEY")
 	slackWebhookURL := mustEnv("SLACK_WEBHOOK_URL")
@@ -124,25 +123,9 @@ func main() {
 		}
 	}()
 
-	var codes []stock.StockCode
-	for _, s := range strings.Split(stockCodesRaw, ",") {
-		s = strings.TrimSpace(s)
-		if s == "" {
-			continue
-		}
-		code, err := stock.NewStockCode(s)
-		if err != nil {
-			log.Printf("skip invalid stock code %q: %v", s, err)
-			continue
-		}
-		codes = append(codes, code)
-	}
-	if len(codes) == 0 {
-		log.Fatal("no valid stock codes in STOCK_CODES")
-	}
-
-	log.Printf("monitoring %d stocks (threshold=%.1fσ, poll=%02d:%02d JST)", len(codes), threshold, pollHour, pollMinute)
-	monitor.StartMonitoring(ctx, codes, pollHour, pollMinute)
+	log.Printf("monitoring watchlist stocks (threshold=%.1fσ, poll=%02d:%02d JST, refresh=%s)",
+		threshold, pollHour, pollMinute, watchlistRefreshInterval)
+	monitor.RunWithDynamicWatchlist(ctx, watchlistRepo, pollHour, pollMinute, watchlistRefreshInterval)
 	log.Println("monitoring stopped")
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)

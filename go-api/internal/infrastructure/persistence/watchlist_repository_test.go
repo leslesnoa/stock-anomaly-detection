@@ -168,3 +168,61 @@ func TestPgWatchlistRepository_UpdateThreshold(t *testing.T) {
 	require.Len(t, found, 1)
 	assert.Equal(t, 4.0, found[0].AlertThreshold)
 }
+
+func TestPgWatchlistRepository_FindAllStockCodes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	conn, err := persistence.Connect(ctx, databaseURL)
+	require.NoError(t, err)
+	defer conn.Close()
+	_, err = conn.Exec(ctx, "TRUNCATE watchlist, users CASCADE")
+	require.NoError(t, err)
+
+	user1 := insertTestUser(t, ctx, conn, "codes-user1@example.com")
+	user2 := insertTestUser(t, ctx, conn, "codes-user2@example.com")
+	repo := persistence.NewPgWatchlistRepository(conn)
+
+	code7203, err := stock.NewStockCode("7203")
+	require.NoError(t, err)
+	code9984, err := stock.NewStockCode("9984")
+	require.NoError(t, err)
+
+	// user1: 7203, user2: 7203（重複）と9984 を登録
+	_, err = repo.Create(ctx, watchlist.Watchlist{UserID: user1, StockCode: code7203, AlertThreshold: 2.5})
+	require.NoError(t, err)
+	_, err = repo.Create(ctx, watchlist.Watchlist{UserID: user2, StockCode: code7203, AlertThreshold: 2.5})
+	require.NoError(t, err)
+	_, err = repo.Create(ctx, watchlist.Watchlist{UserID: user2, StockCode: code9984, AlertThreshold: 2.5})
+	require.NoError(t, err)
+
+	codes, err := repo.FindAllStockCodes(ctx)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []stock.StockCode{code7203, code9984}, codes)
+}
+
+func TestPgWatchlistRepository_FindAllStockCodes_Empty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	conn, err := persistence.Connect(ctx, databaseURL)
+	require.NoError(t, err)
+	defer conn.Close()
+	_, err = conn.Exec(ctx, "TRUNCATE watchlist CASCADE")
+	require.NoError(t, err)
+
+	repo := persistence.NewPgWatchlistRepository(conn)
+	codes, err := repo.FindAllStockCodes(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, codes)
+}

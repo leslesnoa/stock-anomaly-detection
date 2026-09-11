@@ -17,6 +17,10 @@ func (m *mockWatchlistRepository) FindByUserID(ctx context.Context, userID strin
 	args := m.Called(ctx, userID)
 	return args.Get(0).([]watchlist.Watchlist), args.Error(1)
 }
+func (m *mockWatchlistRepository) FindAllStockCodes(ctx context.Context) ([]stock.StockCode, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]stock.StockCode), args.Error(1)
+}
 func (m *mockWatchlistRepository) Create(ctx context.Context, w watchlist.Watchlist) (watchlist.Watchlist, error) {
 	args := m.Called(ctx, w)
 	return args.Get(0).(watchlist.Watchlist), args.Error(1)

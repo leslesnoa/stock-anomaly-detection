@@ -88,3 +88,28 @@ func (r *PgWatchlistRepository) UpdateThreshold(ctx context.Context, id, userID 
 	}
 	return nil
 }
+
+func (r *PgWatchlistRepository) FindAllStockCodes(ctx context.Context) ([]stock.StockCode, error) {
+	rows, err := r.conn.Query(ctx, `SELECT DISTINCT stock_code FROM watchlist`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := []stock.StockCode{}
+	for rows.Next() {
+		var rawCode string
+		if err := rows.Scan(&rawCode); err != nil {
+			return nil, err
+		}
+		sc, err := stock.NewStockCode(rawCode)
+		if err != nil {
+			return nil, fmt.Errorf("invalid stock_code in DB: %w", err)
+		}
+		result = append(result, sc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}

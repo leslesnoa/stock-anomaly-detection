@@ -33,6 +33,7 @@ type MonitorUsecase struct {
 	detector      *anomaly.DetectionService
 	threshold     float64
 	notifyUsecase *AnalyzeAndNotifyUsecase
+	startFn       func(ctx context.Context, codes []stock.StockCode, hour, minute int)
 }
 
 func NewMonitorUsecase(
@@ -42,13 +43,15 @@ func NewMonitorUsecase(
 	threshold float64,
 	notifyUsecase *AnalyzeAndNotifyUsecase,
 ) *MonitorUsecase {
-	return &MonitorUsecase{
+	u := &MonitorUsecase{
 		fetcher:       fetcher,
 		cache:         cache,
 		detector:      detector,
 		threshold:     threshold,
 		notifyUsecase: notifyUsecase,
 	}
+	u.startFn = u.StartMonitoring
+	return u
 }
 
 // CheckStock は1銘柄の価格を取得・キャッシュし、Z-scoreを計算して異常判定する。
