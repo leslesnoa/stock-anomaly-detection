@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Inbox, Loader2, Trash2 } from "lucide-react";
 import type { WatchlistItem } from "@/lib/go-api-client";
 import { removeAction } from "@/app/watchlist/actions";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,15 @@ import {
 } from "@/components/ui/table";
 
 export function WatchlistTable({ items }: { items: WatchlistItem[] }) {
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
+        <Inbox className="size-8" aria-hidden="true" />
+        <p className="text-sm">監視銘柄がまだ登録されていません</p>
+      </div>
+    );
+  }
+
   return (
     <Table>
       <TableHeader>
@@ -48,15 +58,29 @@ function WatchlistRow({ item }: { item: WatchlistItem }) {
   return (
     <TableRow>
       <TableCell>{item.stock_code}</TableCell>
-      <TableCell>
+      <TableCell className="text-right">
         <Button
           variant="destructive"
+          size="sm"
           onClick={handleRemove}
           disabled={isPending}
         >
+          {isPending ? (
+            <Loader2
+              data-icon="inline-start"
+              className="animate-spin"
+              aria-hidden="true"
+            />
+          ) : (
+            <Trash2 data-icon="inline-start" aria-hidden="true" />
+          )}
           削除
         </Button>
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        {error && (
+          <p className="mt-1 text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        )}
       </TableCell>
     </TableRow>
   );
