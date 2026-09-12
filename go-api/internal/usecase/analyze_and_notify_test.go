@@ -79,6 +79,34 @@ func TestAnalyzeAndNotifyUsecase_Handle_HappyPath(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
+func TestAnalyzeAndNotifyUsecase_Handle_NewsHeadlineEqualsSummary_OmitsDuplicateInPrompt(t *testing.T) {
+	newsFetcher := &MockNewsFetcher{}
+	analyzer := &MockAnalyzer{}
+	reportGen := &MockReportGenerator{}
+	notif := &MockNotifier{}
+	repo := &MockNotificationRepository{}
+
+	code, _ := stock.NewStockCode("7203")
+	indicators := analysis.Indicators{RSI: rsi(65.3)}
+
+	newsFetcher.On("FetchRecent", code).Return([]news.Item{
+		{Headline: "自己株式の取得状況に関するお知らせ", Summary: "自己株式の取得状況に関するお知らせ"},
+	}, nil)
+	analyzer.On("Analyze", code, 3.2, 3250.0, mock.Anything).Return(indicators, nil)
+	reportGen.On("GenerateReport", mock.MatchedBy(func(prompt string) bool {
+		return strings.Contains(prompt, "- 自己株式の取得状況に関するお知らせ\n") &&
+			!strings.Contains(prompt, "自己株式の取得状況に関するお知らせ: 自己株式の取得状況に関するお知らせ")
+	})).Return("AI分析結果", nil)
+	notif.On("Send", mock.Anything).Return(nil)
+	repo.On("Save", mock.Anything, mock.Anything).Return(nil)
+
+	uc := usecase.NewAnalyzeAndNotifyUsecase(newsFetcher, analyzer, reportGen, notif, repo)
+	err := uc.Handle(context.Background(), code, 3.2, 3250.0, []float64{3000, 3010, 3250})
+	require.NoError(t, err)
+
+	reportGen.AssertExpectations(t)
+}
+
 func TestAnalyzeAndNotifyUsecase_Handle_AnalyzerFailure_SkipsNotification(t *testing.T) {
 	newsFetcher := &MockNewsFetcher{}
 	analyzer := &MockAnalyzer{}
