@@ -5,7 +5,6 @@ import {
   fetchWatchlist,
   addWatchlistItem,
   removeWatchlistItem,
-  updateWatchlistThreshold,
 } from "./go-api-client";
 
 describe("go-api-client", () => {
@@ -119,7 +118,7 @@ describe("go-api-client", () => {
       ),
     );
 
-    const result = await addWatchlistItem("jwt-token", "7203", 2.5);
+    const result = await addWatchlistItem("jwt-token", "7203");
 
     expect(result).toEqual({
       ok: true,
@@ -134,7 +133,7 @@ describe("go-api-client", () => {
       }),
     );
 
-    const result = await addWatchlistItem("jwt-token", "7203", 2.5);
+    const result = await addWatchlistItem("jwt-token", "7203");
 
     expect(result).toEqual({
       ok: false,
@@ -164,30 +163,6 @@ describe("go-api-client", () => {
       ok: false,
       error: "watchlist item not found",
       status: 404,
-    });
-  });
-
-  it("updateWatchlistThreshold returns ok on 200", async () => {
-    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 200 }));
-
-    const result = await updateWatchlistThreshold("jwt-token", "1", 3.0);
-
-    expect(result).toEqual({ ok: true });
-  });
-
-  it("updateWatchlistThreshold returns error message and status on 400", async () => {
-    vi.mocked(fetch).mockResolvedValue(
-      new Response(JSON.stringify({ error: "invalid threshold" }), {
-        status: 400,
-      }),
-    );
-
-    const result = await updateWatchlistThreshold("jwt-token", "1", -1);
-
-    expect(result).toEqual({
-      ok: false,
-      error: "invalid threshold",
-      status: 400,
     });
   });
 });

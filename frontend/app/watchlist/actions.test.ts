@@ -12,28 +12,21 @@ vi.mock("next/cache", () => ({
 vi.mock("@/lib/go-api-client", () => ({
   addWatchlistItem: vi.fn(),
   removeWatchlistItem: vi.fn(),
-  updateWatchlistThreshold: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({
   requireToken: vi.fn(),
   redirectIfUnauthorized: vi.fn(),
 }));
 
-import {
-  addAction,
-  removeAction,
-  updateThresholdAction,
-  logoutAction,
-} from "./actions";
+import { addAction, removeAction, logoutAction } from "./actions";
 import * as session from "@/lib/session";
 import * as goApiClient from "@/lib/go-api-client";
 import * as auth from "@/lib/auth";
 import { redirect } from "next/navigation";
 
-function watchlistFormData(stockCode: string, threshold: string): FormData {
+function watchlistFormData(stockCode: string): FormData {
   const fd = new FormData();
   fd.set("stock_code", stockCode);
-  fd.set("alert_threshold", threshold);
   return fd;
 }
 
@@ -52,7 +45,7 @@ describe("addAction", () => {
       item: { id: "1", stock_code: "7203", alert_threshold: 2.5 },
     });
 
-    const result = await addAction(null, watchlistFormData("7203", "2.5"));
+    const result = await addAction(null, watchlistFormData("7203"));
 
     expect(result).toEqual({ ok: true });
   });
@@ -64,7 +57,7 @@ describe("addAction", () => {
       status: 409,
     });
 
-    const result = await addAction(null, watchlistFormData("7203", "2.5"));
+    const result = await addAction(null, watchlistFormData("7203"));
 
     expect(result).toEqual({ ok: false, error: "stock already in watchlist" });
   });
@@ -77,7 +70,7 @@ describe("addAction", () => {
     };
     vi.mocked(goApiClient.addWatchlistItem).mockResolvedValue(failure);
 
-    await addAction(null, watchlistFormData("7203", "2.5"));
+    await addAction(null, watchlistFormData("7203"));
 
     expect(auth.redirectIfUnauthorized).toHaveBeenCalledWith(failure);
   });
@@ -121,51 +114,6 @@ describe("removeAction", () => {
     vi.mocked(goApiClient.removeWatchlistItem).mockResolvedValue(failure);
 
     await removeAction("1");
-
-    expect(auth.redirectIfUnauthorized).toHaveBeenCalledWith(failure);
-  });
-});
-
-describe("updateThresholdAction", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(auth.requireToken).mockResolvedValue({
-      ok: true,
-      token: "jwt-token",
-    });
-  });
-
-  it("returns ok on success", async () => {
-    vi.mocked(goApiClient.updateWatchlistThreshold).mockResolvedValue({
-      ok: true,
-    });
-
-    const result = await updateThresholdAction("1", 3.0);
-
-    expect(result).toEqual({ ok: true });
-  });
-
-  it("returns the error message when the API call fails", async () => {
-    vi.mocked(goApiClient.updateWatchlistThreshold).mockResolvedValue({
-      ok: false,
-      error: "invalid threshold",
-      status: 400,
-    });
-
-    const result = await updateThresholdAction("1", -1);
-
-    expect(result).toEqual({ ok: false, error: "invalid threshold" });
-  });
-
-  it("calls redirectIfUnauthorized when the API call returns 401", async () => {
-    const failure = {
-      ok: false as const,
-      error: "missing user context",
-      status: 401,
-    };
-    vi.mocked(goApiClient.updateWatchlistThreshold).mockResolvedValue(failure);
-
-    await updateThresholdAction("1", 3.0);
 
     expect(auth.redirectIfUnauthorized).toHaveBeenCalledWith(failure);
   });

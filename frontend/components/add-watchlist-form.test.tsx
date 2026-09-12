@@ -15,11 +15,11 @@ describe("AddWatchlistForm", () => {
     vi.clearAllMocks();
   });
 
-  it("renders stock code and threshold fields", () => {
+  it("renders the stock code field", () => {
     render(<AddWatchlistForm />);
 
     expect(screen.getByLabelText("証券コード")).toBeInTheDocument();
-    expect(screen.getByLabelText("閾値")).toBeInTheDocument();
+    expect(screen.queryByLabelText("閾値")).not.toBeInTheDocument();
   });
 
   it("shows the error message returned by addAction", async () => {
