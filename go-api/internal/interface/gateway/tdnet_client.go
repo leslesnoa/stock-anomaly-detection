@@ -10,7 +10,11 @@ import (
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 )
 
-const tdnetLimit = 5
+const (
+	tdnetLimit         = 5
+	tdnetLookbackDays  = 7
+	tdnetPubdateLayout = "2006-01-02 15:04:05"
+)
 
 type YanoshinTDnetClient struct {
 	baseURL    string
@@ -47,7 +51,8 @@ func (c *YanoshinTDnetClient) FetchRecent(code stock.StockCode) ([]news.Item, er
 	var result struct {
 		Items []struct {
 			Tdnet struct {
-				Title string `json:"title"`
+				Title   string `json:"title"`
+				Pubdate string `json:"pubdate"`
 			} `json:"Tdnet"`
 		} `json:"items"`
 	}
@@ -55,10 +60,15 @@ func (c *YanoshinTDnetClient) FetchRecent(code stock.StockCode) ([]news.Item, er
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
+	cutoff := time.Now().AddDate(0, 0, -tdnetLookbackDays)
+
 	items := make([]news.Item, 0, tdnetLimit)
-	for i, r := range result.Items {
-		if i >= tdnetLimit {
+	for _, r := range result.Items {
+		if len(items) >= tdnetLimit {
 			break
+		}
+		if pubdate, err := time.Parse(tdnetPubdateLayout, r.Tdnet.Pubdate); err == nil && pubdate.Before(cutoff) {
+			continue
 		}
 		items = append(items, news.Item{Headline: r.Tdnet.Title, Summary: r.Tdnet.Title})
 	}

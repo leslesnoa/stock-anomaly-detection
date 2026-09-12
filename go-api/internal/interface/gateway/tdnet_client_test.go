@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 	"github.com/stock-anomaly-detection/go-api/internal/interface/gateway"
@@ -23,12 +24,12 @@ func TestYanoshinTDnetClient_FetchRecent(t *testing.T) {
 				{"Tdnet": map[string]string{
 					"title":        "自己株式の取得状況に関するお知らせ",
 					"company_code": "72030",
-					"pubdate":      "2026-09-03 15:30:00",
+					"pubdate":      time.Now().Format("2006-01-02 15:04:05"),
 				}},
 				{"Tdnet": map[string]string{
 					"title":        "業績予想の修正に関するお知らせ",
 					"company_code": "72030",
-					"pubdate":      "2026-09-01 10:00:00",
+					"pubdate":      time.Now().AddDate(0, 0, -1).Format("2006-01-02 15:04:05"),
 				}},
 			},
 		}
@@ -69,6 +70,70 @@ func TestYanoshinTDnetClient_FetchRecent_LimitsToTop5(t *testing.T) {
 	got, err := client.FetchRecent(code)
 	require.NoError(t, err)
 	assert.Len(t, got, 5)
+}
+
+func TestYanoshinTDnetClient_FetchRecent_FiltersOldItems(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /tdnet/list/7203.json", func(w http.ResponseWriter, r *http.Request) {
+		recentPubdate := time.Now().Format("2006-01-02 15:04:05")
+		oldPubdate := time.Now().AddDate(0, 0, -100).Format("2006-01-02 15:04:05")
+
+		resp := map[string]any{
+			"total_count": 2,
+			"items": []map[string]any{
+				{"Tdnet": map[string]string{
+					"title":        "直近のお知らせ",
+					"company_code": "72030",
+					"pubdate":      recentPubdate,
+				}},
+				{"Tdnet": map[string]string{
+					"title":        "古いお知らせ",
+					"company_code": "72030",
+					"pubdate":      oldPubdate,
+				}},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewYanoshinTDnetClientWithBaseURL(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+
+	got, err := client.FetchRecent(code)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "直近のお知らせ", got[0].Headline)
+}
+
+func TestYanoshinTDnetClient_FetchRecent_UnparseablePubdateIsKept(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /tdnet/list/7203.json", func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"total_count": 1,
+			"items": []map[string]any{
+				{"Tdnet": map[string]string{
+					"title":        "日付形式不明のお知らせ",
+					"company_code": "72030",
+					"pubdate":      "not-a-date",
+				}},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewYanoshinTDnetClientWithBaseURL(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+
+	got, err := client.FetchRecent(code)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "日付形式不明のお知らせ", got[0].Headline)
 }
 
 func TestYanoshinTDnetClient_FetchRecent_ErrorStatus(t *testing.T) {
