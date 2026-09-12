@@ -23,10 +23,13 @@ describe("WatchlistTable", () => {
     expect(screen.getByText("9984")).toBeInTheDocument();
   });
 
-  it("renders nothing in the body when items is empty", () => {
+  it("shows an empty state when items is empty", () => {
     render(<WatchlistTable items={[]} />);
 
-    expect(screen.getAllByRole("row")).toHaveLength(1);
+    expect(
+      screen.getByText("監視銘柄がまだ登録されていません"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 });
 
