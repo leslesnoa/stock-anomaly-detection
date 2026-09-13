@@ -28,7 +28,6 @@ func main() {
 	defer stop()
 
 	redisURL := mustEnv("REDIS_URL")
-	jQuantsAPIKey := mustEnv("JQUANTS_API_KEY")
 	anthropicAPIKey := mustEnv("ANTHROPIC_API_KEY")
 	slackWebhookURL := mustEnv("SLACK_WEBHOOK_URL")
 	pythonEngineURL := mustEnv("PYTHON_ENGINE_URL")
@@ -77,7 +76,7 @@ func main() {
 	defer pool.Close()
 
 	priceCache := cache.NewRedisPriceCache(redisClient)
-	priceFetcher := gateway.NewJQuantsClient(jQuantsAPIKey)
+	priceFetcher := gateway.NewYahooFinanceClient()
 	newsClient := gateway.NewYanoshinTDnetClient()
 	pythonEngineClient := gateway.NewPythonEngineClient(pythonEngineURL)
 	claudeClient := gateway.NewClaudeClient(anthropicAPIKey, claudeModel)
