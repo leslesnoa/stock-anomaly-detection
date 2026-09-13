@@ -29,7 +29,6 @@ func main() {
 
 	redisURL := mustEnv("REDIS_URL")
 	jQuantsAPIKey := mustEnv("JQUANTS_API_KEY")
-	finnhubAPIKey := mustEnv("FINNHUB_API_KEY")
 	anthropicAPIKey := mustEnv("ANTHROPIC_API_KEY")
 	slackWebhookURL := mustEnv("SLACK_WEBHOOK_URL")
 	pythonEngineURL := mustEnv("PYTHON_ENGINE_URL")
@@ -79,7 +78,7 @@ func main() {
 
 	priceCache := cache.NewRedisPriceCache(redisClient)
 	priceFetcher := gateway.NewJQuantsClient(jQuantsAPIKey)
-	newsClient := gateway.NewFinnhubClient(finnhubAPIKey)
+	newsClient := gateway.NewYanoshinTDnetClient()
 	pythonEngineClient := gateway.NewPythonEngineClient(pythonEngineURL)
 	claudeClient := gateway.NewClaudeClient(anthropicAPIKey, claudeModel)
 	slackClient := gateway.NewSlackClient(slackWebhookURL)
