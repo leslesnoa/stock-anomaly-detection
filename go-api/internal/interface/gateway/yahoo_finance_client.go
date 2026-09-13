@@ -65,6 +65,9 @@ func (c *YahooFinanceClient) FetchLatest(code stock.StockCode) (stock.Quote, err
 
 	timestamps := result.Chart.Result[0].Timestamp
 	closes := result.Chart.Result[0].Indicators.Quote[0].Close
+	if len(timestamps) < len(closes) {
+		closes = closes[:len(timestamps)]
+	}
 	for i := len(closes) - 1; i >= 0; i-- {
 		if closes[i] != nil {
 			date := time.Unix(timestamps[i], 0).In(yahooJST).Format("2006-01-02")

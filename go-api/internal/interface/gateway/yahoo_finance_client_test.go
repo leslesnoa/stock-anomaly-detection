@@ -102,6 +102,68 @@ func TestYahooFinanceClient_FetchLatest_NoData(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestYahooFinanceClient_FetchLatest_AllCloseValuesNull(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v8/finance/chart/7203.T", func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"chart": map[string]any{
+				"result": []map[string]any{
+					{
+						"timestamp": []int64{1783317600, 1783404000, 1783490400},
+						"indicators": map[string]any{
+							"quote": []map[string]any{
+								{"close": []any{nil, nil, nil}},
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewYahooFinanceClientWithBaseURL(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+	_, err := client.FetchLatest(code)
+	require.Error(t, err)
+}
+
+func TestYahooFinanceClient_FetchLatest_TimestampShorterThanClose(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v8/finance/chart/7203.T", func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"chart": map[string]any{
+				"result": []map[string]any{
+					{
+						// timestamp is shorter than close, which would otherwise
+						// cause an index-out-of-range panic when scanning closes.
+						// The only close value within the truncated range is null,
+						// so this should surface as "no quote data", not a panic.
+						"timestamp": []int64{1783317600},
+						"indicators": map[string]any{
+							"quote": []map[string]any{
+								{"close": []any{nil, 3250.0, 3300.0}},
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewYahooFinanceClientWithBaseURL(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+	_, err := client.FetchLatest(code)
+	require.Error(t, err)
+}
+
 func TestYahooFinanceClient_FetchLatest_ErrorStatus(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v8/finance/chart/0000.T", func(w http.ResponseWriter, r *http.Request) {
