@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
@@ -38,7 +39,7 @@ func TestManageWatchlistUsecase_Add_Success(t *testing.T) {
 	repo.On("Create", mock.Anything, watchlist.Watchlist{UserID: "user-1", StockCode: code, AlertThreshold: 3.0}).
 		Return(watchlist.Watchlist{ID: "wl-1", UserID: "user-1", StockCode: code, AlertThreshold: 3.0}, nil)
 
-	uc := usecase.NewManageWatchlistUsecase(repo)
+	uc := usecase.NewManageWatchlistUsecase(repo, nil)
 	result, err := uc.Add(context.Background(), "user-1", "7203", 3.0)
 
 	require.NoError(t, err)
@@ -51,7 +52,7 @@ func TestManageWatchlistUsecase_Add_DefaultThreshold(t *testing.T) {
 	repo.On("Create", mock.Anything, watchlist.Watchlist{UserID: "user-1", StockCode: code, AlertThreshold: 2.5}).
 		Return(watchlist.Watchlist{ID: "wl-1", UserID: "user-1", StockCode: code, AlertThreshold: 2.5}, nil)
 
-	uc := usecase.NewManageWatchlistUsecase(repo)
+	uc := usecase.NewManageWatchlistUsecase(repo, nil)
 	_, err := uc.Add(context.Background(), "user-1", "7203", 0)
 
 	require.NoError(t, err)
@@ -61,7 +62,7 @@ func TestManageWatchlistUsecase_Add_DefaultThreshold(t *testing.T) {
 func TestManageWatchlistUsecase_Add_InvalidStockCode(t *testing.T) {
 	repo := new(mockWatchlistRepository)
 
-	uc := usecase.NewManageWatchlistUsecase(repo)
+	uc := usecase.NewManageWatchlistUsecase(repo, nil)
 	_, err := uc.Add(context.Background(), "user-1", "invalid", 2.5)
 
 	require.Error(t, err)
@@ -72,7 +73,7 @@ func TestManageWatchlistUsecase_Remove(t *testing.T) {
 	repo := new(mockWatchlistRepository)
 	repo.On("Delete", mock.Anything, "wl-1", "user-1").Return(nil)
 
-	uc := usecase.NewManageWatchlistUsecase(repo)
+	uc := usecase.NewManageWatchlistUsecase(repo, nil)
 	err := uc.Remove(context.Background(), "user-1", "wl-1")
 
 	require.NoError(t, err)
@@ -82,7 +83,7 @@ func TestManageWatchlistUsecase_UpdateThreshold(t *testing.T) {
 	repo := new(mockWatchlistRepository)
 	repo.On("UpdateThreshold", mock.Anything, "wl-1", "user-1", 4.0).Return(nil)
 
-	uc := usecase.NewManageWatchlistUsecase(repo)
+	uc := usecase.NewManageWatchlistUsecase(repo, nil)
 	err := uc.UpdateThreshold(context.Background(), "user-1", "wl-1", 4.0)
 
 	require.NoError(t, err)
@@ -92,9 +93,50 @@ func TestManageWatchlistUsecase_List(t *testing.T) {
 	repo := new(mockWatchlistRepository)
 	repo.On("FindByUserID", mock.Anything, "user-1").Return([]watchlist.Watchlist{{ID: "wl-1"}}, nil)
 
-	uc := usecase.NewManageWatchlistUsecase(repo)
+	uc := usecase.NewManageWatchlistUsecase(repo, nil)
 	result, err := uc.List(context.Background(), "user-1")
 
 	require.NoError(t, err)
 	require.Len(t, result, 1)
+}
+
+func TestManageWatchlistUsecase_Add_TriggersBackfill(t *testing.T) {
+	repo := new(mockWatchlistRepository)
+	fetcher := &MockPriceFetcher{}
+	cache := &MockPriceCache{}
+	code, _ := stock.NewStockCode("7203")
+
+	repo.On("Create", mock.Anything, watchlist.Watchlist{UserID: "user-1", StockCode: code, AlertThreshold: 3.0}).
+		Return(watchlist.Watchlist{ID: "wl-1", UserID: "user-1", StockCode: code, AlertThreshold: 3.0}, nil)
+	cache.On("GetHistory", code, 1).Return([]stock.Price{}, nil)
+	fetcher.On("FetchHistory", code, 30).Return([]stock.Quote{{Price: 3200.0, Date: "2026-07-06"}}, nil)
+	cache.On("Push", code, stock.Price(3200.0)).Return(nil)
+	cache.On("SetLastDate", code, "2026-07-06").Return(nil)
+
+	backfiller := usecase.NewBackfillPriceHistoryUsecase(fetcher, cache)
+	uc := usecase.NewManageWatchlistUsecase(repo, backfiller)
+	_, err := uc.Add(context.Background(), "user-1", "7203", 3.0)
+
+	require.NoError(t, err)
+	cache.AssertExpectations(t)
+	fetcher.AssertExpectations(t)
+}
+
+func TestManageWatchlistUsecase_Add_SucceedsEvenIfBackfillFails(t *testing.T) {
+	repo := new(mockWatchlistRepository)
+	fetcher := &MockPriceFetcher{}
+	cache := &MockPriceCache{}
+	code, _ := stock.NewStockCode("7203")
+
+	repo.On("Create", mock.Anything, watchlist.Watchlist{UserID: "user-1", StockCode: code, AlertThreshold: 3.0}).
+		Return(watchlist.Watchlist{ID: "wl-1", UserID: "user-1", StockCode: code, AlertThreshold: 3.0}, nil)
+	cache.On("GetHistory", code, 1).Return([]stock.Price{}, nil)
+	fetcher.On("FetchHistory", code, 30).Return([]stock.Quote{}, errors.New("yahoo finance unavailable"))
+
+	backfiller := usecase.NewBackfillPriceHistoryUsecase(fetcher, cache)
+	uc := usecase.NewManageWatchlistUsecase(repo, backfiller)
+	result, err := uc.Add(context.Background(), "user-1", "7203", 3.0)
+
+	require.NoError(t, err)
+	require.Equal(t, "wl-1", result.ID)
 }
