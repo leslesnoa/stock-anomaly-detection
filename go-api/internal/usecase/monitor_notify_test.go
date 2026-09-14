@@ -254,5 +254,9 @@ func (m *mockNotifyFetcher) FetchLatest(code stock.StockCode) (stock.Quote, erro
 	return stock.Quote{}, nil
 }
 
+func (m *mockNotifyFetcher) FetchHistory(code stock.StockCode, days int) ([]stock.Quote, error) {
+	return nil, nil
+}
+
 // historySize は monitor_stocks.go で定義されている定数と同じ
 // ここでは参照のために定数を参照しているが、実際には 30

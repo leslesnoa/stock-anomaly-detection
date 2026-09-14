@@ -19,6 +19,11 @@ func (m *MockPriceFetcher) FetchLatest(code stock.StockCode) (stock.Quote, error
 	return args.Get(0).(stock.Quote), args.Error(1)
 }
 
+func (m *MockPriceFetcher) FetchHistory(code stock.StockCode, days int) ([]stock.Quote, error) {
+	args := m.Called(code, days)
+	return args.Get(0).([]stock.Quote), args.Error(1)
+}
+
 type MockPriceCache struct{ mock.Mock }
 
 func (m *MockPriceCache) Push(code stock.StockCode, price stock.Price) error {
