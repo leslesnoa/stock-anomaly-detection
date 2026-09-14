@@ -85,6 +85,7 @@ func main() {
 	notifyUsecase := usecase.NewAnalyzeAndNotifyUsecase(newsClient, pythonEngineClient, claudeClient, slackClient, notificationRepo)
 	detector := anomaly.NewDetectionService()
 	monitor := usecase.NewMonitorUsecase(priceFetcher, priceCache, detector, threshold, notifyUsecase)
+	backfillUsecase := usecase.NewBackfillPriceHistoryUsecase(priceFetcher, priceCache)
 
 	userRepo := persistence.NewPgUserRepository(pool)
 	watchlistRepo := persistence.NewPgWatchlistRepository(pool)
@@ -93,7 +94,7 @@ func main() {
 
 	registerUsecase := usecase.NewRegisterUserUsecase(userRepo, hasher)
 	loginUsecase := usecase.NewLoginUserUsecase(userRepo, hasher, tokenService)
-	watchlistUsecase := usecase.NewManageWatchlistUsecase(watchlistRepo)
+	watchlistUsecase := usecase.NewManageWatchlistUsecase(watchlistRepo, backfillUsecase)
 
 	authHandler := handler.NewAuthHandler(registerUsecase, loginUsecase)
 	watchlistHandler := handler.NewWatchlistHandler(watchlistUsecase)
