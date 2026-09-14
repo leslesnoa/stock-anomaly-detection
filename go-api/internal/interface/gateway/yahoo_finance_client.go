@@ -41,20 +41,29 @@ func (c *YahooFinanceClient) FetchLatest(code stock.StockCode) (stock.Quote, err
 	return stock.Quote{}, fmt.Errorf("no quote data for %s", code)
 }
 
-// FetchHistory は直近3ヶ月分の日次終値を取得し、null（未確定値）を除いた上で
-// 直近days件（トレーディングデイ換算）に絞って古い順で返す。
+// FetchHistory は直近3ヶ月分の日次終値を取得し、null（未確定値）および
+// 当日（JST）分を除いた上で直近days件（トレーディングデイ換算）に絞って古い順で返す。
 // 上場から日が浅い銘柄など実件数がdaysに満たない場合はそのまま全件を返す。
+//
+// 当日分を除外する理由: chart APIのclose値は取引時間中も逐次更新されるため、
+// 当日分がnullでなくても、それは確定した終値ではなく取引中の速報値である
+// 可能性がある。当日の確定終値は、その日の取引が引けた後に通常の16:00ポーリング
+// （FetchLatest）が正しく取得するため、ここで速報値を混入させる必要はない。
 func (c *YahooFinanceClient) FetchHistory(code stock.StockCode, days int) ([]stock.Quote, error) {
 	timestamps, closes, err := c.fetchChart(code, "3mo")
 	if err != nil {
 		return nil, err
 	}
+	today := time.Now().In(yahooJST).Format("2006-01-02")
 	quotes := make([]stock.Quote, 0, len(closes))
 	for i, close := range closes {
 		if close == nil {
 			continue
 		}
 		date := time.Unix(timestamps[i], 0).In(yahooJST).Format("2006-01-02")
+		if date == today {
+			continue
+		}
 		quotes = append(quotes, stock.Quote{Price: stock.Price(*close), Date: date})
 	}
 	if len(quotes) > days {

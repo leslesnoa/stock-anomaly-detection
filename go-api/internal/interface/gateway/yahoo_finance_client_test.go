@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 	"github.com/stock-anomaly-detection/go-api/internal/interface/gateway"
@@ -283,6 +284,44 @@ func TestYahooFinanceClient_FetchHistory_SkipsNullCloses(t *testing.T) {
 	require.Len(t, quotes, 2)
 	assert.Equal(t, stock.Quote{Price: 3200.0, Date: "2026-07-06"}, quotes[0])
 	assert.Equal(t, stock.Quote{Price: 3300.0, Date: "2026-07-08"}, quotes[1])
+}
+
+func TestYahooFinanceClient_FetchHistory_ExcludesTodayUnsettledClose(t *testing.T) {
+	jst := time.FixedZone("JST", 9*60*60)
+	now := time.Now().In(jst)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 15, 0, 0, 0, jst)
+	yesterday := today.AddDate(0, 0, -1)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v8/finance/chart/7203.T", func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"chart": map[string]any{
+				"result": []map[string]any{
+					{
+						"timestamp": []int64{yesterday.Unix(), today.Unix()},
+						"indicators": map[string]any{
+							"quote": []map[string]any{
+								{"close": []any{3200.0, 3250.0}}, // 当日分はnullではないが、取引中の速報値
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewYahooFinanceClientWithBaseURL(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+
+	quotes, err := client.FetchHistory(code, 30)
+	require.NoError(t, err)
+	require.Len(t, quotes, 1)
+	assert.Equal(t, stock.Price(3200.0), quotes[0].Price)
+	assert.Equal(t, yesterday.Format("2006-01-02"), quotes[0].Date)
 }
 
 func TestYahooFinanceClient_FetchHistory_NoData(t *testing.T) {
