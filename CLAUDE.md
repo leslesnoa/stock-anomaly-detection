@@ -6,6 +6,7 @@
 1. **ブランチ作成** — `git checkout -b feature/<task-name>`（mainで直接作業禁止）
 2. **プラン作成** — `superpowers:writing-plans` スキルで実装計画を作成・承認を得る
 3. **実装** — 承認済みプランに従って実装する
+4. **Push & PR作成** — 実装完了後は必ずリモートにpushしてPull Requestを作成する（ローカルマージや保留のまま放置しない）
 
 > ハーネスはmainブランチでのコードファイル編集を自動的にブロックします。
 
