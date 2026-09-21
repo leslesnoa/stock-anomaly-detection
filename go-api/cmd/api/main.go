@@ -100,6 +100,7 @@ func main() {
 	watchlistHandler := handler.NewWatchlistHandler(watchlistUsecase)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", handler.Health)
 	mux.HandleFunc("POST /auth/register", authHandler.Register)
 	mux.HandleFunc("POST /auth/login", authHandler.Login)
 	mux.HandleFunc("GET /watchlist", handler.RequireAuth(tokenService, watchlistHandler.List))
