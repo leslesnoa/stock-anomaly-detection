@@ -168,8 +168,13 @@ describe("go-api-client", () => {
 });
 
 describe("go-api-client production guard", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 
