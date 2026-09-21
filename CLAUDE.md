@@ -12,6 +12,7 @@
 ## プロジェクト構造
 - モノレポ: `go-api/`（Goサーバー）、`python-engine/`（将来）、`frontend/`（将来）
 - Goモジュール: `github.com/stock-anomaly-detection/go-api`（`go-api/`内で操作）
+- Railway/Vercelへのデプロイ手順は`docs/deployment/phase5-railway-vercel-setup.md`参照
 
 ## Goコマンド（`go-api/`ディレクトリから実行）
 - `go test -race -short ./...` — 単体テスト（外部サービス不要）

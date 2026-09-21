@@ -9,6 +9,7 @@
 
 - Railwayアカウント・Vercelアカウントを保有していること
 - `railway` CLI（`npm i -g @railway/cli` 等）でログイン済みであること
+- ローカルに`psql`（PostgreSQLクライアント）がインストールされていること（4節のマイグレーション適用で使用）
 
 ## 1. Railwayプロジェクトの作成とDBプラグイン追加
 
@@ -23,7 +24,10 @@
    - Root Directory: リポジトリルート（変更しない）
    - Dockerfile Path: `go-api/Dockerfile`
 3. Settings → Healthcheck Path に `/health` を設定する
-4. 環境変数タブで以下を設定する（`DATABASE_URL`・`REDIS_URL`はPostgres/Redisプラグインの
+4. Settings → Networking → Public Networking → 「Generate Domain」で公開URLを発行する
+   （Railwayはデフォルトではサービスを外部公開しないため、この操作が必要。ここで発行される
+   URLを5節のヘルスチェックのcurl、6節の`GO_API_URL`で使用する）
+5. 環境変数タブで以下を設定する（`DATABASE_URL`・`REDIS_URL`はPostgres/Redisプラグインの
    「Variable Reference」機能で自動注入されるものを使う。`PORT`はRailwayが自動注入するため設定不要）:
 
    | 変数名 | 値 |
@@ -45,14 +49,45 @@
 3. このサービスは外部公開しない（go-apiからのプライベートネットワーキング経由の通信のみ）
 4. サービス作成後に払い出される内部ホスト名（`<サービス名>.railway.internal`）を、
    2節の`PYTHON_ENGINE_URL`に反映する
+5. 環境変数タブで`PORT`を明示的に`8000`に設定する（Railwayは通常`PORT`を自動注入するが、
+   それに任せると`python-engine/Dockerfile`のuvicornが別ポートで待受を始め、
+   2節の`PYTHON_ENGINE_URL`にハードコードした`:8000`と不整合になる。自動注入を上書きして
+   `8000`に固定することで、このズレを防ぐ）
+
+### トラブルシューティング: go-apiからpython-engineに到達できない場合
+
+症状: Slack通知は届くがテクニカル指標のみでAI分析が一度も出ない
+（go-apiのログに`python-engine.railway.internal`への接続エラーが出ていないか確認する）。
+
+考えられる原因: Railwayのプライベートネットワーク（`*.railway.internal`）はIPv6のみで
+疎通する一方、`python-engine/Dockerfile`のuvicornは`--host 0.0.0.0`（IPv4）で待受しており、
+go-apiからの内部通信が黙って失敗している可能性がある。この場合、`AnalyzeAndNotifyUsecase`の
+フォールバック仕様（CLAUDE.md参照）によりClaude分析なしのテクニカル指標のみの通知に
+静かに縮退するため、エラーとして気づきにくい。
+
+想定される対処（本ガイドでは未適用・未検証）: python-engineのuvicorn起動を`::`
+（IPv6ワイルドカード）でバインドするよう変更する。ただしこれはRailwayの現行ネットワーク
+仕様に対する実地検証を行っていない推測であり、実施前に最新のRailwayドキュメントで
+挙動を確認すること。
 
 ## 4. DBマイグレーションの適用
 
-Railway CLIでプロジェクトにリンクした状態で実行する:
+RailwayのPostgresプラグインの`DATABASE_URL`は通常`*.railway.internal`を指しており、
+開発者のローカル端末からは名前解決できない。そのため`railway connect`でRailwayのプロキシ
+経由のローカルpsqlセッションを開き、その中でマイグレーションファイルを読み込む。
+
+Railway CLIでプロジェクトにリンクした状態で実行する（Postgresプラグインのサービス名は
+慣例的に`Postgres`と大文字始まりであることに注意）:
 
 ```bash
 railway link
-railway run --service postgres psql "$DATABASE_URL" -f go-api/migrations/001_initial_schema.sql
+railway connect Postgres
+```
+
+`railway connect`が開いたpsqlセッションの中で、以下を実行する:
+
+```
+\i go-api/migrations/001_initial_schema.sql
 ```
 
 ## 5. go-api / python-engine のデプロイ確認
@@ -66,7 +101,10 @@ railway run --service postgres psql "$DATABASE_URL" -f go-api/migrations/001_ini
 1. Vercelで同じGitHubリポジトリをインポートする
 2. Root Directoryに `frontend` を設定する
 3. Framework PresetはNext.jsが自動検出される（変更不要）
-4. 環境変数タブで `GO_API_URL` に go-apiの公開URL（例: `https://go-api-production.up.railway.app`）を設定する
+4. 環境変数タブで `GO_API_URL` に go-apiの公開URL（例: `https://go-api-production.up.railway.app`）を設定する。
+   VercelのPreviewデプロイも`NODE_ENV=production`でビルドされるため、`GO_API_URL`は
+   Production環境だけでなくPreview環境にも設定すること（Preview限定で未設定だと、
+   該当デプロイは一見正常に見えるがAPI呼び出し時にエラーになる）
 5. デプロイを実行する
 
 ## 7. e2e動作確認

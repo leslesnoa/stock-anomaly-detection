@@ -14,7 +14,7 @@ npm run dev
 
 ## 環境変数
 
-- `GO_API_URL` — Go バックエンド API のベース URL（例: `http://localhost:8080`）。本番環境では必須で、`NODE_ENV=production` の状態で未設定だと起動時（`next build`時を含む）にエラーになります。
+- `GO_API_URL` — Go バックエンド API のベース URL（例: `http://localhost:8080`）。本番環境では必須。ガードは実際のAPI呼び出し時（リクエスト時）に発火する仕様のため、`GO_API_URL`未設定でも`next build`自体は成功します。`NODE_ENV=production`の状態で未設定のままAPI呼び出しが実行されると、その時点でエラーになります。
 
 このプロジェクトは [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) を使い、Vercel のフォントファミリーである [Geist](https://vercel.com/font) を自動的に最適化・読み込みしています。
 
