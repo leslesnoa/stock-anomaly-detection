@@ -17,6 +17,9 @@ RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /bin/api /bin/api
 
+RUN adduser -D -u 10001 app
+USER app
+
 EXPOSE 8080
 
 CMD ["/bin/api"]
