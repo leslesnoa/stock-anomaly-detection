@@ -6,12 +6,14 @@
 1. **ブランチ作成** — `git checkout -b feature/<task-name>`（mainで直接作業禁止）
 2. **プラン作成** — `superpowers:writing-plans` スキルで実装計画を作成・承認を得る
 3. **実装** — 承認済みプランに従って実装する
+4. **Push & PR作成** — 実装完了後は必ずリモートにpushしてPull Requestを作成する（ローカルマージや保留のまま放置しない）
 
 > ハーネスはmainブランチでのコードファイル編集を自動的にブロックします。
 
 ## プロジェクト構造
 - モノレポ: `go-api/`（Goサーバー）、`python-engine/`（将来）、`frontend/`（将来）
 - Goモジュール: `github.com/stock-anomaly-detection/go-api`（`go-api/`内で操作）
+- Railway/Vercelへのデプロイ手順は`docs/deployment/phase5-railway-vercel-setup.md`参照
 
 ## Goコマンド（`go-api/`ディレクトリから実行）
 - `go test -race -short ./...` — 単体テスト（外部サービス不要）
