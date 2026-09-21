@@ -166,3 +166,29 @@ describe("go-api-client", () => {
     });
   });
 });
+
+describe("go-api-client production guard", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("does not throw when the module is loaded in production without GO_API_URL", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("GO_API_URL", "");
+
+    await expect(import("./go-api-client")).resolves.toBeDefined();
+  });
+
+  it("throws when an API call is made in production without GO_API_URL", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("GO_API_URL", "");
+    vi.stubGlobal("fetch", vi.fn());
+
+    const { registerUser } = await import("./go-api-client");
+
+    await expect(registerUser("a@example.com", "password123")).rejects.toThrow(
+      "GO_API_URL must be set in production",
+    );
+  });
+});

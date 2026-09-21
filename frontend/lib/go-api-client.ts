@@ -12,7 +12,7 @@ export type ApiFailure = {
 
 type ApiErrorBody = { error: string };
 
-const GO_API_URL = (() => {
+function getGoApiUrl(): string {
   const url = process.env.GO_API_URL;
   if (!url) {
     if (process.env.NODE_ENV === "production") {
@@ -21,7 +21,7 @@ const GO_API_URL = (() => {
     return "http://localhost:8080";
   }
   return url;
-})();
+}
 
 async function toFailure(res: Response): Promise<ApiFailure> {
   const body = (await res.json()) as ApiErrorBody;
@@ -32,7 +32,7 @@ export async function registerUser(
   email: string,
   password: string,
 ): Promise<{ ok: true } | ApiFailure> {
-  const res = await fetch(`${GO_API_URL}/auth/register`, {
+  const res = await fetch(`${getGoApiUrl()}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -47,7 +47,7 @@ export async function loginUser(
   email: string,
   password: string,
 ): Promise<{ ok: true; token: string } | ApiFailure> {
-  const res = await fetch(`${GO_API_URL}/auth/login`, {
+  const res = await fetch(`${getGoApiUrl()}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -62,7 +62,7 @@ export async function loginUser(
 export async function fetchWatchlist(
   token: string,
 ): Promise<{ ok: true; items: WatchlistItem[] } | ApiFailure> {
-  const res = await fetch(`${GO_API_URL}/watchlist`, {
+  const res = await fetch(`${getGoApiUrl()}/watchlist`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
@@ -77,7 +77,7 @@ export async function addWatchlistItem(
   token: string,
   stockCode: string,
 ): Promise<{ ok: true; item: WatchlistItem } | ApiFailure> {
-  const res = await fetch(`${GO_API_URL}/watchlist`, {
+  const res = await fetch(`${getGoApiUrl()}/watchlist`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -96,7 +96,7 @@ export async function removeWatchlistItem(
   token: string,
   id: string,
 ): Promise<{ ok: true } | ApiFailure> {
-  const res = await fetch(`${GO_API_URL}/watchlist/${id}`, {
+  const res = await fetch(`${getGoApiUrl()}/watchlist/${id}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
   });
