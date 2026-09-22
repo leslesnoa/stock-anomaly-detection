@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -21,7 +22,7 @@ func NewPgWatchlistRepository(conn *pgxpool.Pool) *PgWatchlistRepository {
 
 func (r *PgWatchlistRepository) FindByUserID(ctx context.Context, userID string) ([]watchlist.Watchlist, error) {
 	rows, err := r.conn.Query(ctx,
-		`SELECT id, user_id, stock_code, alert_threshold, created_at FROM watchlist WHERE user_id = $1`,
+		`SELECT id, user_id, stock_code, stock_name, alert_threshold, created_at FROM watchlist WHERE user_id = $1`,
 		userID)
 	if err != nil {
 		return nil, err
@@ -32,7 +33,8 @@ func (r *PgWatchlistRepository) FindByUserID(ctx context.Context, userID string)
 	for rows.Next() {
 		var w watchlist.Watchlist
 		var rawCode string
-		if err := rows.Scan(&w.ID, &w.UserID, &rawCode, &w.AlertThreshold, &w.CreatedAt); err != nil {
+		var stockName sql.NullString
+		if err := rows.Scan(&w.ID, &w.UserID, &rawCode, &stockName, &w.AlertThreshold, &w.CreatedAt); err != nil {
 			return nil, err
 		}
 		sc, err := stock.NewStockCode(rawCode)
@@ -40,6 +42,7 @@ func (r *PgWatchlistRepository) FindByUserID(ctx context.Context, userID string)
 			return nil, fmt.Errorf("invalid stock_code in DB: %w", err)
 		}
 		w.StockCode = sc
+		w.StockName = stockName.String
 		result = append(result, w)
 	}
 	if err := rows.Err(); err != nil {
@@ -50,9 +53,9 @@ func (r *PgWatchlistRepository) FindByUserID(ctx context.Context, userID string)
 
 func (r *PgWatchlistRepository) Create(ctx context.Context, w watchlist.Watchlist) (watchlist.Watchlist, error) {
 	err := r.conn.QueryRow(ctx,
-		`INSERT INTO watchlist (user_id, stock_code, alert_threshold) VALUES ($1, $2, $3)
+		`INSERT INTO watchlist (user_id, stock_code, stock_name, alert_threshold) VALUES ($1, $2, $3, $4)
 		 RETURNING id, created_at`,
-		w.UserID, w.StockCode.String(), w.AlertThreshold,
+		w.UserID, w.StockCode.String(), nullIfEmpty(w.StockName), w.AlertThreshold,
 	).Scan(&w.ID, &w.CreatedAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -112,4 +115,11 @@ func (r *PgWatchlistRepository) FindAllStockCodes(ctx context.Context) ([]stock.
 		return nil, err
 	}
 	return result, nil
+}
+
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
