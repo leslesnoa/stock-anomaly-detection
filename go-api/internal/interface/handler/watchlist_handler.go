@@ -29,11 +29,12 @@ func NewWatchlistHandler(watchlists watchlistUsecase) *WatchlistHandler {
 type watchlistItemResponse struct {
 	ID             string  `json:"id"`
 	StockCode      string  `json:"stock_code"`
+	StockName      string  `json:"stock_name"`
 	AlertThreshold float64 `json:"alert_threshold"`
 }
 
 func toWatchlistItemResponse(w watchlist.Watchlist) watchlistItemResponse {
-	return watchlistItemResponse{ID: w.ID, StockCode: w.StockCode.String(), AlertThreshold: w.AlertThreshold}
+	return watchlistItemResponse{ID: w.ID, StockCode: w.StockCode.String(), StockName: w.StockName, AlertThreshold: w.AlertThreshold}
 }
 
 func (h *WatchlistHandler) List(w http.ResponseWriter, r *http.Request) {

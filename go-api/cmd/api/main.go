@@ -94,9 +94,7 @@ func main() {
 
 	registerUsecase := usecase.NewRegisterUserUsecase(userRepo, hasher)
 	loginUsecase := usecase.NewLoginUserUsecase(userRepo, hasher, tokenService)
-	// TODO: pass priceFetcher (implements stock.NameFetcher) as the third argument
-	// once the handler/response wiring for stock_name lands (later task).
-	watchlistUsecase := usecase.NewManageWatchlistUsecase(watchlistRepo, backfillUsecase, nil)
+	watchlistUsecase := usecase.NewManageWatchlistUsecase(watchlistRepo, backfillUsecase, priceFetcher)
 
 	authHandler := handler.NewAuthHandler(registerUsecase, loginUsecase)
 	watchlistHandler := handler.NewWatchlistHandler(watchlistUsecase)
