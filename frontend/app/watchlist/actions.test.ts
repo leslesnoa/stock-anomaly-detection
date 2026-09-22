@@ -42,7 +42,12 @@ describe("addAction", () => {
   it("returns ok on success", async () => {
     vi.mocked(goApiClient.addWatchlistItem).mockResolvedValue({
       ok: true,
-      item: { id: "1", stock_code: "7203", alert_threshold: 2.5 },
+      item: {
+        id: "1",
+        stock_code: "7203",
+        stock_name: "Toyota Motor Corporation",
+        alert_threshold: 2.5,
+      },
     });
 
     const result = await addAction(null, watchlistFormData("7203"));

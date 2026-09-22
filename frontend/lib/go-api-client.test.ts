@@ -73,7 +73,14 @@ describe("go-api-client", () => {
   it("fetchWatchlist returns items and sends bearer token", async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response(
-        JSON.stringify([{ id: "1", stock_code: "7203", alert_threshold: 2.5 }]),
+        JSON.stringify([
+          {
+            id: "1",
+            stock_code: "7203",
+            stock_name: "Toyota Motor Corporation",
+            alert_threshold: 2.5,
+          },
+        ]),
         { status: 200 },
       ),
     );
@@ -82,7 +89,14 @@ describe("go-api-client", () => {
 
     expect(result).toEqual({
       ok: true,
-      items: [{ id: "1", stock_code: "7203", alert_threshold: 2.5 }],
+      items: [
+        {
+          id: "1",
+          stock_code: "7203",
+          stock_name: "Toyota Motor Corporation",
+          alert_threshold: 2.5,
+        },
+      ],
     });
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost:8080/watchlist",
@@ -111,7 +125,12 @@ describe("go-api-client", () => {
   it("addWatchlistItem returns created item on 201", async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response(
-        JSON.stringify({ id: "1", stock_code: "7203", alert_threshold: 2.5 }),
+        JSON.stringify({
+          id: "1",
+          stock_code: "7203",
+          stock_name: "Toyota Motor Corporation",
+          alert_threshold: 2.5,
+        }),
         {
           status: 201,
         },
@@ -122,7 +141,12 @@ describe("go-api-client", () => {
 
     expect(result).toEqual({
       ok: true,
-      item: { id: "1", stock_code: "7203", alert_threshold: 2.5 },
+      item: {
+        id: "1",
+        stock_code: "7203",
+        stock_name: "Toyota Motor Corporation",
+        alert_threshold: 2.5,
+      },
     });
   });
 

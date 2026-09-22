@@ -9,18 +9,42 @@ vi.mock("@/app/watchlist/actions", () => ({
 import * as actions from "@/app/watchlist/actions";
 
 describe("WatchlistTable", () => {
-  it("renders each watchlist item's stock code", () => {
+  it("renders each watchlist item's stock code and name", () => {
     render(
       <WatchlistTable
         items={[
-          { id: "1", stock_code: "7203", alert_threshold: 2.5 },
-          { id: "2", stock_code: "9984", alert_threshold: 3.0 },
+          {
+            id: "1",
+            stock_code: "7203",
+            stock_name: "Toyota Motor Corporation",
+            alert_threshold: 2.5,
+          },
+          {
+            id: "2",
+            stock_code: "9984",
+            stock_name: "SoftBank Group Corp.",
+            alert_threshold: 3.0,
+          },
         ]}
       />,
     );
 
     expect(screen.getByText("7203")).toBeInTheDocument();
+    expect(screen.getByText("Toyota Motor Corporation")).toBeInTheDocument();
     expect(screen.getByText("9984")).toBeInTheDocument();
+    expect(screen.getByText("SoftBank Group Corp.")).toBeInTheDocument();
+  });
+
+  it("falls back to a dash when stock_name is empty", () => {
+    render(
+      <WatchlistTable
+        items={[
+          { id: "1", stock_code: "7203", stock_name: "", alert_threshold: 2.5 },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("-")).toBeInTheDocument();
   });
 
   it("shows an empty state when items is empty", () => {
@@ -43,7 +67,14 @@ describe("WatchlistTable row actions", () => {
 
     render(
       <WatchlistTable
-        items={[{ id: "1", stock_code: "7203", alert_threshold: 2.5 }]}
+        items={[
+          {
+            id: "1",
+            stock_code: "7203",
+            stock_name: "Toyota Motor Corporation",
+            alert_threshold: 2.5,
+          },
+        ]}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "削除" }));

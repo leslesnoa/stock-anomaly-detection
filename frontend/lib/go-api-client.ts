@@ -1,6 +1,7 @@
 export type WatchlistItem = {
   id: string;
   stock_code: string;
+  stock_name: string;
   alert_threshold: number;
 };
 

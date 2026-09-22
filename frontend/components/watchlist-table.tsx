@@ -29,6 +29,7 @@ export function WatchlistTable({ items }: { items: WatchlistItem[] }) {
       <TableHeader>
         <TableRow>
           <TableHead>証券コード</TableHead>
+          <TableHead>銘柄名</TableHead>
           <TableHead />
         </TableRow>
       </TableHeader>
@@ -58,6 +59,7 @@ function WatchlistRow({ item }: { item: WatchlistItem }) {
   return (
     <TableRow>
       <TableCell>{item.stock_code}</TableCell>
+      <TableCell>{item.stock_name || "-"}</TableCell>
       <TableCell className="text-right">
         <Button
           variant="destructive"
