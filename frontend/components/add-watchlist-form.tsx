@@ -18,7 +18,7 @@ export function AddWatchlistForm() {
   return (
     <form
       action={formAction}
-      className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-2"
+      className="flex flex-col flex-wrap gap-3 sm:flex-row sm:items-end sm:gap-2"
     >
       <div className="flex-1 space-y-1.5">
         <Label htmlFor="stock_code">証券コード</Label>

@@ -18,6 +18,10 @@ func TestNewStockCode(t *testing.T) {
 		{"empty code returns error", "", true},
 		{"5-digit code returns error", "72030", true},
 		{"non-numeric code returns error", "ABCD", true},
+		{"valid alphanumeric code (new TSE format)", "421A", false},
+		{"lowercase letter suffix returns error", "421a", true},
+		{"letter not in last position returns error", "42A1", true},
+		{"two letter suffix returns error", "42AA", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
