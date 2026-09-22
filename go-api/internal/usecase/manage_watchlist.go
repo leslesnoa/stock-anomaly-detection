@@ -14,16 +14,19 @@ const defaultAlertThreshold = 2.5
 var ErrInvalidThreshold = errors.New("alert threshold must be positive")
 
 type ManageWatchlistUsecase struct {
-	watchlists watchlist.Repository
-	backfiller *BackfillPriceHistoryUsecase
+	watchlists  watchlist.Repository
+	backfiller  *BackfillPriceHistoryUsecase
+	nameFetcher stock.NameFetcher
 }
 
-func NewManageWatchlistUsecase(watchlists watchlist.Repository, backfiller *BackfillPriceHistoryUsecase) *ManageWatchlistUsecase {
-	return &ManageWatchlistUsecase{watchlists: watchlists, backfiller: backfiller}
+func NewManageWatchlistUsecase(watchlists watchlist.Repository, backfiller *BackfillPriceHistoryUsecase, nameFetcher stock.NameFetcher) *ManageWatchlistUsecase {
+	return &ManageWatchlistUsecase{watchlists: watchlists, backfiller: backfiller, nameFetcher: nameFetcher}
 }
 
-// Add はwatchlistへ銘柄を登録し、backfillerが設定されていれば価格履歴の
-// バックフィルを試みる。バックフィル失敗はログのみに留め、登録自体は成功として返す。
+// Add はwatchlistへ銘柄を登録する。nameFetcherが設定されていれば銘柄名の取得も試みる
+// （失敗してもログのみに留め、空文字のまま登録を続行する）。backfillerが設定されて
+// いれば価格履歴のバックフィルも試みる。バックフィル失敗もログのみに留め、登録自体は
+// 成功として返す。
 func (u *ManageWatchlistUsecase) Add(ctx context.Context, userID, rawStockCode string, threshold float64) (watchlist.Watchlist, error) {
 	code, err := stock.NewStockCode(rawStockCode)
 	if err != nil {
@@ -32,9 +35,20 @@ func (u *ManageWatchlistUsecase) Add(ctx context.Context, userID, rawStockCode s
 	if threshold == 0 {
 		threshold = defaultAlertThreshold
 	}
+
+	var name string
+	if u.nameFetcher != nil {
+		name, err = u.nameFetcher.FetchCompanyName(code)
+		if err != nil {
+			log.Printf("ERROR fetch company name %s: %v", code, err)
+			name = ""
+		}
+	}
+
 	w, err := u.watchlists.Create(ctx, watchlist.Watchlist{
 		UserID:         userID,
 		StockCode:      code,
+		StockName:      name,
 		AlertThreshold: threshold,
 	})
 	if err != nil {
