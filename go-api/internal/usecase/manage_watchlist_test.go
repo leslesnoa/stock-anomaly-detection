@@ -66,6 +66,20 @@ func TestManageWatchlistUsecase_Add_DefaultThreshold(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
+func TestManageWatchlistUsecase_Add_NormalizesLowercaseAndWhitespace(t *testing.T) {
+	repo := new(mockWatchlistRepository)
+	code, _ := stock.NewStockCode("421A")
+	repo.On("Create", mock.Anything, watchlist.Watchlist{UserID: "user-1", StockCode: code, AlertThreshold: 2.5}).
+		Return(watchlist.Watchlist{ID: "wl-1", UserID: "user-1", StockCode: code, AlertThreshold: 2.5}, nil)
+
+	uc := usecase.NewManageWatchlistUsecase(repo, nil, nil)
+	result, err := uc.Add(context.Background(), "user-1", "  421a  ", 0)
+
+	require.NoError(t, err)
+	require.Equal(t, "wl-1", result.ID)
+	repo.AssertExpectations(t)
+}
+
 func TestManageWatchlistUsecase_Add_InvalidStockCode(t *testing.T) {
 	repo := new(mockWatchlistRepository)
 

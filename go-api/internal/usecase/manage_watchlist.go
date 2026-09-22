@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"strings"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/watchlist"
@@ -28,7 +29,7 @@ func NewManageWatchlistUsecase(watchlists watchlist.Repository, backfiller *Back
 // いれば価格履歴のバックフィルも試みる。バックフィル失敗もログのみに留め、登録自体は
 // 成功として返す。
 func (u *ManageWatchlistUsecase) Add(ctx context.Context, userID, rawStockCode string, threshold float64) (watchlist.Watchlist, error) {
-	code, err := stock.NewStockCode(rawStockCode)
+	code, err := stock.NewStockCode(strings.ToUpper(strings.TrimSpace(rawStockCode)))
 	if err != nil {
 		return watchlist.Watchlist{}, err
 	}
