@@ -28,7 +28,7 @@ func NewYahooFinanceClientWithBaseURL(baseURL string) *YahooFinanceClient {
 }
 
 func (c *YahooFinanceClient) FetchLatest(code stock.StockCode) (stock.Quote, error) {
-	timestamps, closes, err := c.fetchChart(code, "5d")
+	timestamps, closes, _, err := c.fetchChart(code, "5d")
 	if err != nil {
 		return stock.Quote{}, err
 	}
@@ -50,7 +50,7 @@ func (c *YahooFinanceClient) FetchLatest(code stock.StockCode) (stock.Quote, err
 // 可能性がある。当日の確定終値は、その日の取引が引けた後に通常の16:00ポーリング
 // （FetchLatest）が正しく取得するため、ここで速報値を混入させる必要はない。
 func (c *YahooFinanceClient) FetchHistory(code stock.StockCode, days int) ([]stock.Quote, error) {
-	timestamps, closes, err := c.fetchChart(code, "3mo")
+	timestamps, closes, _, err := c.fetchChart(code, "3mo")
 	if err != nil {
 		return nil, err
 	}
@@ -72,29 +72,44 @@ func (c *YahooFinanceClient) FetchHistory(code stock.StockCode, days int) ([]sto
 	return quotes, nil
 }
 
+// FetchCompanyName は銘柄の英語表記の企業名を取得する。longNameを優先し、
+// なければshortNameにフォールバックする。両方空の場合は空文字列を返す
+// （エラーにはしない。呼び出し元でログのみ出して空文字のまま扱う想定）。
+func (c *YahooFinanceClient) FetchCompanyName(code stock.StockCode) (string, error) {
+	_, _, name, err := c.fetchChart(code, "1d")
+	if err != nil {
+		return "", err
+	}
+	return name, nil
+}
+
 // fetchChart はYahoo Finance chart APIを叩き、タイムスタンプと終値の配列を返す。
 // タイムスタンプ数より終値数が多い場合は終値側を切り詰める
 // （データ不整合によるindex out of range panicを防ぐため）。
-func (c *YahooFinanceClient) fetchChart(code stock.StockCode, rangeParam string) ([]int64, []*float64, error) {
+func (c *YahooFinanceClient) fetchChart(code stock.StockCode, rangeParam string) ([]int64, []*float64, string, error) {
 	url := fmt.Sprintf("%s/v8/finance/chart/%s.T?range=%s&interval=1d", c.baseURL, code, rangeParam)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, nil, fmt.Errorf("fetch quotes: %w", err)
+		return nil, nil, "", fmt.Errorf("fetch quotes: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil, fmt.Errorf("yahoo finance api returned status %d", resp.StatusCode)
+		return nil, nil, "", fmt.Errorf("yahoo finance api returned status %d", resp.StatusCode)
 	}
 
 	var result struct {
 		Chart struct {
 			Result []struct {
+				Meta struct {
+					LongName  string `json:"longName"`
+					ShortName string `json:"shortName"`
+				} `json:"meta"`
 				Timestamp  []int64 `json:"timestamp"`
 				Indicators struct {
 					Quote []struct {
@@ -105,16 +120,21 @@ func (c *YahooFinanceClient) fetchChart(code stock.StockCode, rangeParam string)
 		} `json:"chart"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, nil, fmt.Errorf("decode response: %w", err)
+		return nil, nil, "", fmt.Errorf("decode response: %w", err)
 	}
 	if len(result.Chart.Result) == 0 || len(result.Chart.Result[0].Indicators.Quote) == 0 {
-		return nil, nil, fmt.Errorf("no quote data for %s", code)
+		return nil, nil, "", fmt.Errorf("no quote data for %s", code)
 	}
 
-	timestamps := result.Chart.Result[0].Timestamp
-	closes := result.Chart.Result[0].Indicators.Quote[0].Close
+	r := result.Chart.Result[0]
+	timestamps := r.Timestamp
+	closes := r.Indicators.Quote[0].Close
 	if len(timestamps) < len(closes) {
 		closes = closes[:len(timestamps)]
 	}
-	return timestamps, closes, nil
+	name := r.Meta.LongName
+	if name == "" {
+		name = r.Meta.ShortName
+	}
+	return timestamps, closes, name, nil
 }
