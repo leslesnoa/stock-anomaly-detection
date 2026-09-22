@@ -84,10 +84,13 @@ railway link
 railway connect Postgres
 ```
 
-`railway connect`が開いたpsqlセッションの中で、以下を実行する:
+`railway connect`が開いたpsqlセッションの中で、`go-api/migrations/`ディレクトリの
+マイグレーションファイルを、ファイル名の昇順に実行する。番号がついた順序で実行することで、
+将来マイグレーションファイルが追加されたとき、このドキュメントを更新する手間を省ける:
 
 ```
 \i go-api/migrations/001_initial_schema.sql
+\i go-api/migrations/002_add_watchlist_stock_name.sql
 ```
 
 ## 5. go-api / python-engine のデプロイ確認
