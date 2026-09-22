@@ -343,3 +343,120 @@ func TestYahooFinanceClient_FetchHistory_NoData(t *testing.T) {
 	_, err := client.FetchHistory(code, 30)
 	require.Error(t, err)
 }
+
+func TestYahooFinanceClient_FetchCompanyName_PrefersLongName(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v8/finance/chart/7203.T", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "1d", r.URL.Query().Get("range"))
+		resp := map[string]any{
+			"chart": map[string]any{
+				"result": []map[string]any{
+					{
+						"meta": map[string]any{
+							"longName":  "Toyota Motor Corporation",
+							"shortName": "TOYOTA MOTOR CORP",
+						},
+						"timestamp": []int64{1783404000},
+						"indicators": map[string]any{
+							"quote": []map[string]any{
+								{"close": []any{3250.0}},
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewYahooFinanceClientWithBaseURL(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+
+	name, err := client.FetchCompanyName(code)
+	require.NoError(t, err)
+	assert.Equal(t, "Toyota Motor Corporation", name)
+}
+
+func TestYahooFinanceClient_FetchCompanyName_FallsBackToShortName(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v8/finance/chart/7203.T", func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"chart": map[string]any{
+				"result": []map[string]any{
+					{
+						"meta": map[string]any{
+							"shortName": "TOYOTA MOTOR CORP",
+						},
+						"timestamp": []int64{1783404000},
+						"indicators": map[string]any{
+							"quote": []map[string]any{
+								{"close": []any{3250.0}},
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewYahooFinanceClientWithBaseURL(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+
+	name, err := client.FetchCompanyName(code)
+	require.NoError(t, err)
+	assert.Equal(t, "TOYOTA MOTOR CORP", name)
+}
+
+func TestYahooFinanceClient_FetchCompanyName_EmptyWhenNoNameInMeta(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v8/finance/chart/7203.T", func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"chart": map[string]any{
+				"result": []map[string]any{
+					{
+						"meta":      map[string]any{},
+						"timestamp": []int64{1783404000},
+						"indicators": map[string]any{
+							"quote": []map[string]any{
+								{"close": []any{3250.0}},
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewYahooFinanceClientWithBaseURL(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+
+	name, err := client.FetchCompanyName(code)
+	require.NoError(t, err)
+	assert.Equal(t, "", name)
+}
+
+func TestYahooFinanceClient_FetchCompanyName_ErrorStatus(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v8/finance/chart/0000.T", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewYahooFinanceClientWithBaseURL(srv.URL)
+	code, _ := stock.NewStockCode("0000")
+	_, err := client.FetchCompanyName(code)
+	require.Error(t, err)
+}

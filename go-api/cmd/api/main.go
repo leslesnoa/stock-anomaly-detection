@@ -94,7 +94,7 @@ func main() {
 
 	registerUsecase := usecase.NewRegisterUserUsecase(userRepo, hasher)
 	loginUsecase := usecase.NewLoginUserUsecase(userRepo, hasher, tokenService)
-	watchlistUsecase := usecase.NewManageWatchlistUsecase(watchlistRepo, backfillUsecase)
+	watchlistUsecase := usecase.NewManageWatchlistUsecase(watchlistRepo, backfillUsecase, priceFetcher)
 
 	authHandler := handler.NewAuthHandler(registerUsecase, loginUsecase)
 	watchlistHandler := handler.NewWatchlistHandler(watchlistUsecase)

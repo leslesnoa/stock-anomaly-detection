@@ -64,7 +64,7 @@ func withUserContext(req *http.Request, userID string) *http.Request {
 
 func TestWatchlistHandler_List(t *testing.T) {
 	code, _ := stock.NewStockCode("7203")
-	h := handler.NewWatchlistHandler(stubWatchlistUsecase{listResult: []watchlist.Watchlist{{ID: "wl-1", StockCode: code, AlertThreshold: 2.5}}})
+	h := handler.NewWatchlistHandler(stubWatchlistUsecase{listResult: []watchlist.Watchlist{{ID: "wl-1", StockCode: code, StockName: "Toyota Motor Corporation", AlertThreshold: 2.5}}})
 	req := withUserContext(httptest.NewRequest(http.MethodGet, "/watchlist", nil), "user-1")
 	rec := httptest.NewRecorder()
 
@@ -75,6 +75,7 @@ func TestWatchlistHandler_List(t *testing.T) {
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
 	assert.Len(t, resp, 1)
 	assert.Equal(t, "7203", resp[0]["stock_code"])
+	assert.Equal(t, "Toyota Motor Corporation", resp[0]["stock_name"])
 }
 
 func TestWatchlistHandler_Add_Success(t *testing.T) {

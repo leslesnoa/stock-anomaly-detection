@@ -50,7 +50,9 @@ jobs:
         run: go test -race -short ./...
 
       - name: Run database migration
-        run: psql $DATABASE_URL -f go-api/migrations/001_initial_schema.sql
+        run: |
+          psql $DATABASE_URL -f go-api/migrations/001_initial_schema.sql
+          psql $DATABASE_URL -f go-api/migrations/002_add_watchlist_stock_name.sql
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/stock_anomaly_test?sslmode=disable
 

@@ -67,7 +67,7 @@ func TestPgWatchlistRepository_CreateAndFindByUserID(t *testing.T) {
 	code, err := stock.NewStockCode("7203")
 	require.NoError(t, err)
 
-	created, err := repo.Create(ctx, watchlist.Watchlist{UserID: userID, StockCode: code, AlertThreshold: 3.0})
+	created, err := repo.Create(ctx, watchlist.Watchlist{UserID: userID, StockCode: code, StockName: "Toyota Motor Corporation", AlertThreshold: 3.0})
 	require.NoError(t, err)
 	assert.NotEmpty(t, created.ID)
 
@@ -75,7 +75,37 @@ func TestPgWatchlistRepository_CreateAndFindByUserID(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, found, 1)
 	assert.Equal(t, code, found[0].StockCode)
+	assert.Equal(t, "Toyota Motor Corporation", found[0].StockName)
 	assert.Equal(t, 3.0, found[0].AlertThreshold)
+}
+
+func TestPgWatchlistRepository_CreateAndFindByUserID_EmptyStockName(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	conn, err := persistence.Connect(ctx, databaseURL)
+	require.NoError(t, err)
+	defer conn.Close()
+	_, err = conn.Exec(ctx, "TRUNCATE watchlist, users CASCADE")
+	require.NoError(t, err)
+
+	userID := insertTestUser(t, ctx, conn, "watchlist-noname@example.com")
+	repo := persistence.NewPgWatchlistRepository(conn)
+	code, err := stock.NewStockCode("7203")
+	require.NoError(t, err)
+
+	_, err = repo.Create(ctx, watchlist.Watchlist{UserID: userID, StockCode: code, AlertThreshold: 2.5})
+	require.NoError(t, err)
+
+	found, err := repo.FindByUserID(ctx, userID)
+	require.NoError(t, err)
+	require.Len(t, found, 1)
+	assert.Equal(t, "", found[0].StockName)
 }
 
 func TestPgWatchlistRepository_Create_Duplicate(t *testing.T) {

@@ -10,6 +10,7 @@ type Watchlist struct {
 	ID             string
 	UserID         string
 	StockCode      stock.StockCode
+	StockName      string
 	AlertThreshold float64
 	CreatedAt      time.Time
 }
