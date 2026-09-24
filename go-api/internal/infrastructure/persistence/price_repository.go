@@ -62,7 +62,8 @@ func (r *PgPriceRepository) SaveAll(ctx context.Context, code stock.StockCode, q
 	br := r.conn.SendBatch(ctx, batch)
 	for range quotes {
 		if _, err := br.Exec(); err != nil {
-			br.Close()
+			// Exec由来のエラーを優先して返すため、Close側のエラーは意図的に無視する。
+			_ = br.Close()
 			return fmt.Errorf("save prices %s: %w", code, err)
 		}
 	}
