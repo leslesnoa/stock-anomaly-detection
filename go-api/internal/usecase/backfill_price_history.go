@@ -3,6 +3,8 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"log"
+	"time"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 )
@@ -44,4 +46,29 @@ func (u *BackfillPriceHistoryUsecase) Run(ctx context.Context, code stock.StockC
 		return fmt.Errorf("save history %s: %w", code, err)
 	}
 	return nil
+}
+
+// RunAll は与えられた銘柄を逐次バックフィルする。銘柄間に interval のウェイトを
+// 挟むのは、Yahoo Finance が非公式APIでレート制限が明記されておらず、
+// 起動直後に全銘柄分を一斉に投げるとIPブロックされるリスクがあるため。
+//
+// 個別銘柄の失敗はログに留めて次へ進む。1銘柄の取得失敗で
+// 残り全銘柄の移行が止まる方が運用上まずい。
+// ctx がキャンセルされたら即座に打ち切る。
+func (u *BackfillPriceHistoryUsecase) RunAll(ctx context.Context, codes []stock.StockCode, interval time.Duration) {
+	for i, code := range codes {
+		if ctx.Err() != nil {
+			return
+		}
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(interval):
+			}
+		}
+		if err := u.Run(ctx, code); err != nil {
+			log.Printf("ERROR backfill price history %s: %v", code, err)
+		}
+	}
 }

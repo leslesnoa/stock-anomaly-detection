@@ -21,6 +21,10 @@ import (
 
 const watchlistRefreshInterval = 5 * time.Minute
 
+// startupBackfillInterval は起動時バックフィルで銘柄間に挟むウェイト。
+// Yahoo Finance へ一斉にリクエストを投げないための間隔。
+const startupBackfillInterval = 2 * time.Second
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -111,6 +115,22 @@ func main() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("http server: %v", err)
 		}
+	}()
+
+	// 起動時バックフィル: daily_prices に履歴が無い銘柄をYahooから取得して埋める。
+	// 旧Redisキャッシュには日付が保存されていなかったため移行できず、既存銘柄は
+	// ここで取り直す。履歴がある銘柄は Run がDB参照1回でスキップするので、
+	// 2回目以降の起動では実質ノーオペレーションになる。
+	// HTTPサーバーと監視ループを待たせないよう goroutine で回す。
+	go func() {
+		codes, err := watchlistRepo.FindAllStockCodes(ctx)
+		if err != nil {
+			log.Printf("ERROR fetch watchlist codes for startup backfill: %v", err)
+			return
+		}
+		log.Printf("startup backfill: checking %d stocks", len(codes))
+		backfillUsecase.RunAll(ctx, codes, startupBackfillInterval)
+		log.Println("startup backfill finished")
 	}()
 
 	log.Printf("monitoring watchlist stocks (threshold=%.1fσ, poll=%02d:%02d JST, refresh=%s)",
