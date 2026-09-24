@@ -29,7 +29,7 @@ func nextPollTime(now time.Time, hour, minute int) time.Time {
 
 type MonitorUsecase struct {
 	fetcher       stock.PriceFetcher
-	cache         stock.PriceCache
+	prices        stock.PriceRepository
 	detector      *anomaly.DetectionService
 	threshold     float64
 	notifyUsecase *AnalyzeAndNotifyUsecase
@@ -38,14 +38,14 @@ type MonitorUsecase struct {
 
 func NewMonitorUsecase(
 	fetcher stock.PriceFetcher,
-	cache stock.PriceCache,
+	prices stock.PriceRepository,
 	detector *anomaly.DetectionService,
 	threshold float64,
 	notifyUsecase *AnalyzeAndNotifyUsecase,
 ) *MonitorUsecase {
 	u := &MonitorUsecase{
 		fetcher:       fetcher,
-		cache:         cache,
+		prices:        prices,
 		detector:      detector,
 		threshold:     threshold,
 		notifyUsecase: notifyUsecase,
@@ -54,7 +54,7 @@ func NewMonitorUsecase(
 	return u
 }
 
-// CheckStock は1銘柄の価格を取得・キャッシュし、Z-scoreを計算して異常判定する。
+// CheckStock は1銘柄の価格を取得・保存し、Z-scoreを計算して異常判定する。
 // 履歴が30件未満の場合は detected=false を返す（ウォームアップ期間）。
 func (u *MonitorUsecase) CheckStock(ctx context.Context, code stock.StockCode) (bool, anomaly.ZScore, error) {
 	quote, err := u.fetcher.FetchLatest(code)
@@ -62,34 +62,32 @@ func (u *MonitorUsecase) CheckStock(ctx context.Context, code stock.StockCode) (
 		return false, 0, fmt.Errorf("fetch %s: %w", code, err)
 	}
 
-	lastDate, err := u.cache.LastDate(code)
+	latestDate, err := u.prices.LatestDate(ctx, code)
 	if err != nil {
-		return false, 0, fmt.Errorf("last date %s: %w", code, err)
+		return false, 0, fmt.Errorf("latest date %s: %w", code, err)
 	}
-	// 同一取引日は既に取り込み済み。重複を積むと標準偏差が歪むため Push しない。
-	if quote.Date == lastDate {
+	// 同一取引日は既に取り込み済み。重複を積むと標準偏差が歪むため保存しない。
+	// （daily_prices の主キー制約でも弾かれるが、無駄なDB往復と再計算を避ける）
+	if quote.Date == latestDate {
 		return false, 0, nil
 	}
 
-	if err := u.cache.Push(code, quote.Price); err != nil {
-		return false, 0, fmt.Errorf("cache push %s: %w", code, err)
-	}
-	if err := u.cache.SetLastDate(code, quote.Date); err != nil {
-		return false, 0, fmt.Errorf("set last date %s: %w", code, err)
+	if err := u.prices.Save(ctx, code, quote); err != nil {
+		return false, 0, fmt.Errorf("save price %s: %w", code, err)
 	}
 
-	prices, err := u.cache.GetHistory(code, historySize)
+	quotes, err := u.prices.FindRecent(ctx, code, historySize)
 	if err != nil {
-		return false, 0, fmt.Errorf("cache get %s: %w", code, err)
+		return false, 0, fmt.Errorf("find recent %s: %w", code, err)
 	}
 
-	if len(prices) < historySize {
+	if len(quotes) < historySize {
 		return false, 0, nil
 	}
 
-	floatPrices := make([]float64, len(prices))
-	for i, p := range prices {
-		floatPrices[i] = float64(p)
+	floatPrices := make([]float64, len(quotes))
+	for i, q := range quotes {
+		floatPrices[i] = float64(q.Price)
 	}
 
 	z, err := u.detector.Calculate(floatPrices)
@@ -106,14 +104,14 @@ func (u *MonitorUsecase) notify(ctx context.Context, code stock.StockCode, z ano
 	if u.notifyUsecase == nil {
 		return
 	}
-	prices, err := u.cache.GetHistory(code, historySize)
-	if err != nil || len(prices) == 0 {
+	quotes, err := u.prices.FindRecent(ctx, code, historySize)
+	if err != nil || len(quotes) == 0 {
 		log.Printf("ERROR fetch history for notify %s: %v", code, err)
 		return
 	}
-	floatPrices := make([]float64, len(prices))
-	for i, p := range prices {
-		floatPrices[i] = float64(p)
+	floatPrices := make([]float64, len(quotes))
+	for i, q := range quotes {
+		floatPrices[i] = float64(q.Price)
 	}
 	currentPrice := floatPrices[len(floatPrices)-1]
 	if err := u.notifyUsecase.Handle(ctx, code, float64(z), currentPrice, floatPrices); err != nil {

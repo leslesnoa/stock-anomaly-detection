@@ -12,9 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/anomaly"
-	"github.com/stock-anomaly-detection/go-api/internal/infrastructure/cache"
 	"github.com/stock-anomaly-detection/go-api/internal/infrastructure/persistence"
 	"github.com/stock-anomaly-detection/go-api/internal/interface/gateway"
 	"github.com/stock-anomaly-detection/go-api/internal/interface/handler"
@@ -27,7 +25,6 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	redisURL := mustEnv("REDIS_URL")
 	anthropicAPIKey := mustEnv("ANTHROPIC_API_KEY")
 	slackWebhookURL := mustEnv("SLACK_WEBHOOK_URL")
 	pythonEngineURL := mustEnv("PYTHON_ENGINE_URL")
@@ -61,13 +58,6 @@ func main() {
 		}
 	}
 
-	opt, err := redis.ParseURL(redisURL)
-	if err != nil {
-		log.Fatalf("invalid REDIS_URL: %v", err)
-	}
-	redisClient := redis.NewClient(opt)
-	defer redisClient.Close()
-
 	databaseURL := mustEnv("DATABASE_URL")
 	pool, err := persistence.Connect(ctx, databaseURL)
 	if err != nil {
@@ -75,7 +65,6 @@ func main() {
 	}
 	defer pool.Close()
 
-	priceCache := cache.NewRedisPriceCache(redisClient)
 	priceRepo := persistence.NewPgPriceRepository(pool)
 	priceFetcher := gateway.NewYahooFinanceClient()
 	newsClient := gateway.NewYanoshinTDnetClient()
@@ -85,7 +74,7 @@ func main() {
 	notificationRepo := persistence.NewPgNotificationRepository(pool)
 	notifyUsecase := usecase.NewAnalyzeAndNotifyUsecase(newsClient, pythonEngineClient, claudeClient, slackClient, notificationRepo)
 	detector := anomaly.NewDetectionService()
-	monitor := usecase.NewMonitorUsecase(priceFetcher, priceCache, detector, threshold, notifyUsecase)
+	monitor := usecase.NewMonitorUsecase(priceFetcher, priceRepo, detector, threshold, notifyUsecase)
 	backfillUsecase := usecase.NewBackfillPriceHistoryUsecase(priceFetcher, priceRepo)
 
 	userRepo := persistence.NewPgUserRepository(pool)
