@@ -41,8 +41,9 @@ func (c *YahooFinanceClient) FetchLatest(code stock.StockCode) (stock.Quote, err
 	return stock.Quote{}, fmt.Errorf("no quote data for %s", code)
 }
 
-// FetchHistory は直近3ヶ月分の日次終値を取得し、null（未確定値）および
-// 当日（JST）分を除いた上で直近days件（トレーディングデイ換算）に絞って古い順で返す。
+// FetchHistory は必要日数（days、トレーディングデイ換算）をカバーする期間の
+// 日次終値を取得し、null（未確定値）および当日（JST）分を除いた上で
+// 直近days件に絞って古い順で返す。
 // 上場から日が浅い銘柄など実件数がdaysに満たない場合はそのまま全件を返す。
 //
 // 当日分を除外する理由: chart APIのclose値は取引時間中も逐次更新されるため、
@@ -50,7 +51,7 @@ func (c *YahooFinanceClient) FetchLatest(code stock.StockCode) (stock.Quote, err
 // 可能性がある。当日の確定終値は、その日の取引が引けた後に通常の16:00ポーリング
 // （FetchLatest）が正しく取得するため、ここで速報値を混入させる必要はない。
 func (c *YahooFinanceClient) FetchHistory(code stock.StockCode, days int) ([]stock.Quote, error) {
-	timestamps, closes, _, err := c.fetchChart(code, "3mo")
+	timestamps, closes, _, err := c.fetchChart(code, historyRange(days))
 	if err != nil {
 		return nil, err
 	}
@@ -70,6 +71,21 @@ func (c *YahooFinanceClient) FetchHistory(code stock.StockCode, days int) ([]sto
 		quotes = quotes[len(quotes)-days:]
 	}
 	return quotes, nil
+}
+
+// historyRange は必要な営業日数を満たす最小のYahoo chart APIレンジを選ぶ。
+// 日本市場の営業日は年約245日なので、3mo≒60日・1y≒245日・2y≒490日として閾値を置く。
+// 必要以上に長いレンジを常用するとレスポンスサイズとパース時間が無駄に増えるため、
+// 用途（監視ウィンドウ30件 / チャート用2年）に応じて切り替える。
+func historyRange(days int) string {
+	switch {
+	case days <= 60:
+		return "3mo"
+	case days <= 250:
+		return "1y"
+	default:
+		return "2y"
+	}
 }
 
 // FetchCompanyName は銘柄の英語表記の企業名を取得する。longNameを優先し、
