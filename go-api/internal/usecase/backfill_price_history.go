@@ -27,14 +27,20 @@ func NewBackfillPriceHistoryUsecase(fetcher stock.PriceFetcher, prices stock.Pri
 	return &BackfillPriceHistoryUsecase{fetcher: fetcher, prices: prices}
 }
 
-// Run はcodeの価格履歴が空の場合のみ過去backfillDays件を取得して保存する。
-// 既に履歴が存在する場合（同一銘柄を別ユーザーが既に監視中）は何もしない。
+// Run はcodeの価格履歴がhistorySize件未満の場合のみ過去backfillDays件を取得して保存する。
+// 既にhistorySize件以上の履歴が存在する場合（同一銘柄を別ユーザーが既に監視中、または
+// 過去のバックフィルが正常に完了済み）は何もしない。
 func (u *BackfillPriceHistoryUsecase) Run(ctx context.Context, code stock.StockCode) error {
-	existing, err := u.prices.FindRecent(ctx, code, 1)
+	existing, err := u.prices.FindRecent(ctx, code, historySize)
 	if err != nil {
 		return fmt.Errorf("check existing history %s: %w", code, err)
 	}
-	if len(existing) > 0 {
+	// 監視ウィンドウ（historySize件）を満たしていない銘柄は取り直す。
+	// 「1件でもあればスキップ」にすると、003適用前の起動やYahoo障害でバックフィルが
+	// 失敗した直後に日次ポーリングが1件だけ書き込んだ場合、以降どの再起動でも
+	// スキップされ続け、異常検知が約30営業日ぶん無言で止まる。
+	// SaveAll は ON CONFLICT DO NOTHING なので、再取得しても既存行は壊れない。
+	if len(existing) >= historySize {
 		return nil
 	}
 

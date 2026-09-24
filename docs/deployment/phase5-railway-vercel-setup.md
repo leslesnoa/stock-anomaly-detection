@@ -96,6 +96,16 @@ railway connect Postgres
 > **既にRedisプラグインを追加済みの環境について:** go-apiは2026-09-24以降Redisを一切参照しない。
 > Railwayプロジェクトに残っているRedisプラグインと`REDIS_URL`の変数参照は削除してよい。
 
+> **既存環境のアップグレード手順（2026-09-24）:** `003_create_daily_prices.sql` は
+> **新しいgo-apiイメージをデプロイする前に**適用すること。テーブルが無い状態でgo-apiが起動すると、
+> 起動時バックフィルが全銘柄で失敗し、そのプロセスの間は再試行されない。
+> デプロイ後に適用してしまった場合は、go-apiサービスを再起動して起動時バックフィルをやり直す。
+> 適用後は以下で各銘柄におよそ500行（約2年分）入っていることを確認する:
+>
+> ```sql
+> SELECT stock_code, count(*), min(date), max(date) FROM daily_prices GROUP BY stock_code;
+> ```
+
 ## 5. go-api / python-engine のデプロイ確認
 
 1. Railwayダッシュボードで両サービスのデプロイが成功していることを確認する

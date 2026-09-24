@@ -4,7 +4,7 @@ import "context"
 
 // PriceRepository は日次終値の永続化を担う。Quote.Date は "YYYY-MM-DD"（JST基準）。
 //
-// 旧 PriceCache と違い日付を保持するため、SetLastDate/LastDate の二重管理が不要になり、
+// Quote 自身が日付を持つため、最終取引日を別途管理する必要がない。
 // 「同一取引日を二重に積んで標準偏差を歪める」事故を DB の主キー制約で防げる。
 // DB アクセスは呼び出し元のキャンセルに追従させたいので ctx を取る。
 type PriceRepository interface {

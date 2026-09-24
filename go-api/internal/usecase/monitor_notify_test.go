@@ -100,11 +100,11 @@ func TestMonitorUsecase_Notify_WithNilNotifyUsecase(t *testing.T) {
 	monitor.notify(context.Background(), code, z)
 
 	// ここで検証: リポジトリには何も呼ばれないはず
-	prices.AssertNotCalled(t, "FindRecent")
+	prices.AssertNotCalled(t, "FindRecent", mock.Anything, mock.Anything, mock.Anything)
 }
 
 // TestMonitorUsecase_Notify_ExtractsCurrentPriceCorrectly は、
-// キャッシュから取得した価格履歴から currentPrice が正しく抽出されることを検証する。
+// 価格リポジトリから取得した価格履歴から currentPrice が正しく抽出されることを検証する。
 // 特に、末尾の要素が currentPrice であること。
 func TestMonitorUsecase_Notify_ExtractsCurrentPriceCorrectly(t *testing.T) {
 	prices := &MockPriceRepositoryForNotifyTest{}
@@ -169,7 +169,7 @@ func TestMonitorUsecase_Notify_ExtractsCurrentPriceCorrectly(t *testing.T) {
 }
 
 // TestMonitorUsecase_Notify_HandlesEmptyHistoryGracefully は、
-// キャッシュから価格履歴が取得できない場合、notify が
+// 価格リポジトリから価格履歴が取得できない場合、notify が
 // gracefully に処理を終了することを検証する。
 func TestMonitorUsecase_Notify_HandlesEmptyHistoryGracefully(t *testing.T) {
 	prices := &MockPriceRepositoryForNotifyTest{}

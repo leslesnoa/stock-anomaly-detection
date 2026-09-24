@@ -130,7 +130,7 @@ func TestManageWatchlistUsecase_Add_TriggersBackfill(t *testing.T) {
 	quotes := []stock.Quote{{Price: 3200.0, Date: "2026-07-06"}}
 	repo.On("Create", mock.Anything, watchlist.Watchlist{UserID: "user-1", StockCode: code, AlertThreshold: 3.0}).
 		Return(watchlist.Watchlist{ID: "wl-1", UserID: "user-1", StockCode: code, AlertThreshold: 3.0}, nil)
-	prices.On("FindRecent", mock.Anything, code, 1).Return([]stock.Quote{}, nil)
+	prices.On("FindRecent", mock.Anything, code, 30).Return([]stock.Quote{}, nil)
 	fetcher.On("FetchHistory", code, 500).Return(quotes, nil)
 	prices.On("SaveAll", mock.Anything, code, quotes).Return(nil)
 
@@ -151,7 +151,7 @@ func TestManageWatchlistUsecase_Add_SucceedsEvenIfBackfillFails(t *testing.T) {
 
 	repo.On("Create", mock.Anything, watchlist.Watchlist{UserID: "user-1", StockCode: code, AlertThreshold: 3.0}).
 		Return(watchlist.Watchlist{ID: "wl-1", UserID: "user-1", StockCode: code, AlertThreshold: 3.0}, nil)
-	prices.On("FindRecent", mock.Anything, code, 1).Return([]stock.Quote{}, nil)
+	prices.On("FindRecent", mock.Anything, code, 30).Return([]stock.Quote{}, nil)
 	fetcher.On("FetchHistory", code, 500).Return([]stock.Quote{}, errors.New("yahoo finance unavailable"))
 
 	backfiller := usecase.NewBackfillPriceHistoryUsecase(fetcher, prices)

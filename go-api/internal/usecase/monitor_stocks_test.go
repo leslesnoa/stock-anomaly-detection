@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/anomaly"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
@@ -34,12 +35,14 @@ func TestMonitorUsecase_CheckStock_DetectsAnomaly(t *testing.T) {
 	// history: 29件 交互 90/110（mean≈99.65, stddev≈10）
 	// current: 130（z≈3.0 → anomaly）
 	allQuotes := make([]stock.Quote, 0, 30)
+	historyStart := time.Date(2026, 6, 8, 0, 0, 0, 0, time.UTC)
 	for i := 0; i < 29; i++ {
 		p := stock.Price(110)
 		if i%2 == 0 {
 			p = stock.Price(90)
 		}
-		allQuotes = append(allQuotes, stock.Quote{Price: p, Date: "2026-06-01"})
+		date := historyStart.AddDate(0, 0, i).Format("2006-01-02")
+		allQuotes = append(allQuotes, stock.Quote{Price: p, Date: date})
 	}
 	allQuotes = append(allQuotes, stock.Quote{Price: 130, Date: "2026-07-07"})
 
