@@ -1,6 +1,7 @@
 package usecase_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -10,57 +11,74 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBackfillPriceHistoryUsecase_Run_PushesHistoryWhenCacheEmpty(t *testing.T) {
+func TestBackfillPriceHistoryUsecase_Run_SavesHistoryWhenStoreEmpty(t *testing.T) {
 	fetcher := &MockPriceFetcher{}
-	cache := &MockPriceCache{}
+	prices := &MockPriceRepository{}
 	code, _ := stock.NewStockCode("7203")
+	ctx := context.Background()
 
 	quotes := []stock.Quote{
 		{Price: 3200.0, Date: "2026-07-06"},
 		{Price: 3250.0, Date: "2026-07-07"},
 		{Price: 3300.0, Date: "2026-07-08"},
 	}
-	cache.On("GetHistory", code, 1).Return([]stock.Price{}, nil)
-	fetcher.On("FetchHistory", code, 30).Return(quotes, nil)
-	cache.On("Push", code, stock.Price(3200.0)).Return(nil)
-	cache.On("Push", code, stock.Price(3250.0)).Return(nil)
-	cache.On("Push", code, stock.Price(3300.0)).Return(nil)
-	cache.On("SetLastDate", code, "2026-07-08").Return(nil)
+	prices.On("FindRecent", ctx, code, 1).Return([]stock.Quote{}, nil)
+	fetcher.On("FetchHistory", code, 500).Return(quotes, nil)
+	prices.On("SaveAll", ctx, code, quotes).Return(nil)
 
-	uc := usecase.NewBackfillPriceHistoryUsecase(fetcher, cache)
-	err := uc.Run(code)
+	uc := usecase.NewBackfillPriceHistoryUsecase(fetcher, prices)
+	err := uc.Run(ctx, code)
 
 	require.NoError(t, err)
-	cache.AssertExpectations(t)
+	prices.AssertExpectations(t)
 	fetcher.AssertExpectations(t)
 }
 
 func TestBackfillPriceHistoryUsecase_Run_SkipsWhenHistoryAlreadyExists(t *testing.T) {
 	fetcher := &MockPriceFetcher{}
-	cache := &MockPriceCache{}
+	prices := &MockPriceRepository{}
 	code, _ := stock.NewStockCode("7203")
+	ctx := context.Background()
 
-	cache.On("GetHistory", code, 1).Return([]stock.Price{3300.0}, nil)
+	prices.On("FindRecent", ctx, code, 1).Return([]stock.Quote{{Price: 3300.0, Date: "2026-07-08"}}, nil)
 
-	uc := usecase.NewBackfillPriceHistoryUsecase(fetcher, cache)
-	err := uc.Run(code)
+	uc := usecase.NewBackfillPriceHistoryUsecase(fetcher, prices)
+	err := uc.Run(ctx, code)
 
 	require.NoError(t, err)
 	fetcher.AssertNotCalled(t, "FetchHistory", mock.Anything, mock.Anything)
-	cache.AssertNotCalled(t, "Push", mock.Anything, mock.Anything)
+	prices.AssertNotCalled(t, "SaveAll", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestBackfillPriceHistoryUsecase_Run_PropagatesFetchError(t *testing.T) {
 	fetcher := &MockPriceFetcher{}
-	cache := &MockPriceCache{}
+	prices := &MockPriceRepository{}
 	code, _ := stock.NewStockCode("7203")
+	ctx := context.Background()
 
-	cache.On("GetHistory", code, 1).Return([]stock.Price{}, nil)
-	fetcher.On("FetchHistory", code, 30).Return([]stock.Quote{}, errors.New("fetch failed"))
+	prices.On("FindRecent", ctx, code, 1).Return([]stock.Quote{}, nil)
+	fetcher.On("FetchHistory", code, 500).Return([]stock.Quote{}, errors.New("fetch failed"))
 
-	uc := usecase.NewBackfillPriceHistoryUsecase(fetcher, cache)
-	err := uc.Run(code)
+	uc := usecase.NewBackfillPriceHistoryUsecase(fetcher, prices)
+	err := uc.Run(ctx, code)
 
 	require.Error(t, err)
-	cache.AssertNotCalled(t, "Push", mock.Anything, mock.Anything)
+	prices.AssertNotCalled(t, "SaveAll", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestBackfillPriceHistoryUsecase_Run_PropagatesSaveError(t *testing.T) {
+	fetcher := &MockPriceFetcher{}
+	prices := &MockPriceRepository{}
+	code, _ := stock.NewStockCode("7203")
+	ctx := context.Background()
+
+	quotes := []stock.Quote{{Price: 3200.0, Date: "2026-07-06"}}
+	prices.On("FindRecent", ctx, code, 1).Return([]stock.Quote{}, nil)
+	fetcher.On("FetchHistory", code, 500).Return(quotes, nil)
+	prices.On("SaveAll", ctx, code, quotes).Return(errors.New("db down"))
+
+	uc := usecase.NewBackfillPriceHistoryUsecase(fetcher, prices)
+	err := uc.Run(ctx, code)
+
+	require.Error(t, err)
 }

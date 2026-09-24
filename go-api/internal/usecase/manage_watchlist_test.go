@@ -124,37 +124,37 @@ func TestManageWatchlistUsecase_List(t *testing.T) {
 func TestManageWatchlistUsecase_Add_TriggersBackfill(t *testing.T) {
 	repo := new(mockWatchlistRepository)
 	fetcher := &MockPriceFetcher{}
-	cache := &MockPriceCache{}
+	prices := &MockPriceRepository{}
 	code, _ := stock.NewStockCode("7203")
 
+	quotes := []stock.Quote{{Price: 3200.0, Date: "2026-07-06"}}
 	repo.On("Create", mock.Anything, watchlist.Watchlist{UserID: "user-1", StockCode: code, AlertThreshold: 3.0}).
 		Return(watchlist.Watchlist{ID: "wl-1", UserID: "user-1", StockCode: code, AlertThreshold: 3.0}, nil)
-	cache.On("GetHistory", code, 1).Return([]stock.Price{}, nil)
-	fetcher.On("FetchHistory", code, 30).Return([]stock.Quote{{Price: 3200.0, Date: "2026-07-06"}}, nil)
-	cache.On("Push", code, stock.Price(3200.0)).Return(nil)
-	cache.On("SetLastDate", code, "2026-07-06").Return(nil)
+	prices.On("FindRecent", mock.Anything, code, 1).Return([]stock.Quote{}, nil)
+	fetcher.On("FetchHistory", code, 500).Return(quotes, nil)
+	prices.On("SaveAll", mock.Anything, code, quotes).Return(nil)
 
-	backfiller := usecase.NewBackfillPriceHistoryUsecase(fetcher, cache)
+	backfiller := usecase.NewBackfillPriceHistoryUsecase(fetcher, prices)
 	uc := usecase.NewManageWatchlistUsecase(repo, backfiller, nil)
 	_, err := uc.Add(context.Background(), "user-1", "7203", 3.0)
 
 	require.NoError(t, err)
-	cache.AssertExpectations(t)
+	prices.AssertExpectations(t)
 	fetcher.AssertExpectations(t)
 }
 
 func TestManageWatchlistUsecase_Add_SucceedsEvenIfBackfillFails(t *testing.T) {
 	repo := new(mockWatchlistRepository)
 	fetcher := &MockPriceFetcher{}
-	cache := &MockPriceCache{}
+	prices := &MockPriceRepository{}
 	code, _ := stock.NewStockCode("7203")
 
 	repo.On("Create", mock.Anything, watchlist.Watchlist{UserID: "user-1", StockCode: code, AlertThreshold: 3.0}).
 		Return(watchlist.Watchlist{ID: "wl-1", UserID: "user-1", StockCode: code, AlertThreshold: 3.0}, nil)
-	cache.On("GetHistory", code, 1).Return([]stock.Price{}, nil)
-	fetcher.On("FetchHistory", code, 30).Return([]stock.Quote{}, errors.New("yahoo finance unavailable"))
+	prices.On("FindRecent", mock.Anything, code, 1).Return([]stock.Quote{}, nil)
+	fetcher.On("FetchHistory", code, 500).Return([]stock.Quote{}, errors.New("yahoo finance unavailable"))
 
-	backfiller := usecase.NewBackfillPriceHistoryUsecase(fetcher, cache)
+	backfiller := usecase.NewBackfillPriceHistoryUsecase(fetcher, prices)
 	uc := usecase.NewManageWatchlistUsecase(repo, backfiller, nil)
 	result, err := uc.Add(context.Background(), "user-1", "7203", 3.0)
 

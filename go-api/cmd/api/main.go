@@ -76,6 +76,7 @@ func main() {
 	defer pool.Close()
 
 	priceCache := cache.NewRedisPriceCache(redisClient)
+	priceRepo := persistence.NewPgPriceRepository(pool)
 	priceFetcher := gateway.NewYahooFinanceClient()
 	newsClient := gateway.NewYanoshinTDnetClient()
 	pythonEngineClient := gateway.NewPythonEngineClient(pythonEngineURL)
@@ -85,7 +86,7 @@ func main() {
 	notifyUsecase := usecase.NewAnalyzeAndNotifyUsecase(newsClient, pythonEngineClient, claudeClient, slackClient, notificationRepo)
 	detector := anomaly.NewDetectionService()
 	monitor := usecase.NewMonitorUsecase(priceFetcher, priceCache, detector, threshold, notifyUsecase)
-	backfillUsecase := usecase.NewBackfillPriceHistoryUsecase(priceFetcher, priceCache)
+	backfillUsecase := usecase.NewBackfillPriceHistoryUsecase(priceFetcher, priceRepo)
 
 	userRepo := persistence.NewPgUserRepository(pool)
 	watchlistRepo := persistence.NewPgWatchlistRepository(pool)
