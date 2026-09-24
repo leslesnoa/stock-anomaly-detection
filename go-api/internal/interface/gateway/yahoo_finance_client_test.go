@@ -460,3 +460,53 @@ func TestYahooFinanceClient_FetchCompanyName_ErrorStatus(t *testing.T) {
 	_, err := client.FetchCompanyName(code)
 	require.Error(t, err)
 }
+
+func TestYahooFinanceClient_FetchHistory_SelectsRangeFromRequestedDays(t *testing.T) {
+	tests := []struct {
+		name          string
+		days          int
+		expectedRange string
+	}{
+		{name: "30営業日は3mo", days: 30, expectedRange: "3mo"},
+		{name: "境界の60営業日は3mo", days: 60, expectedRange: "3mo"},
+		{name: "61営業日は1y", days: 61, expectedRange: "1y"},
+		{name: "境界の250営業日は1y", days: 250, expectedRange: "1y"},
+		{name: "251営業日は2y", days: 251, expectedRange: "2y"},
+		{name: "500営業日は2y", days: 500, expectedRange: "2y"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /v8/finance/chart/7203.T", func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, tt.expectedRange, r.URL.Query().Get("range"))
+				assert.Equal(t, "1d", r.URL.Query().Get("interval"))
+
+				resp := map[string]any{
+					"chart": map[string]any{
+						"result": []map[string]any{
+							{
+								"timestamp": []int64{1783317600},
+								"indicators": map[string]any{
+									"quote": []map[string]any{
+										{"close": []any{3200.0}},
+									},
+								},
+							},
+						},
+					},
+				}
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
+			})
+
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+
+			client := gateway.NewYahooFinanceClientWithBaseURL(srv.URL)
+			code, _ := stock.NewStockCode("7203")
+
+			_, err := client.FetchHistory(code, tt.days)
+			require.NoError(t, err)
+		})
+	}
+}

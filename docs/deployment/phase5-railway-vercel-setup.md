@@ -15,7 +15,6 @@
 
 1. Railwayで新規プロジェクトを作成する
 2. プロジェクトに「PostgreSQL」プラグインを追加する
-3. プロジェクトに「Redis」プラグインを追加する
 
 ## 2. go-api サービスの追加
 
@@ -27,7 +26,7 @@
 4. Settings → Networking → Public Networking → 「Generate Domain」で公開URLを発行する
    （Railwayはデフォルトではサービスを外部公開しないため、この操作が必要。ここで発行される
    URLを5節のヘルスチェックのcurl、6節の`GO_API_URL`で使用する）
-5. 環境変数タブで以下を設定する（`DATABASE_URL`・`REDIS_URL`はPostgres/Redisプラグインの
+5. 環境変数タブで以下を設定する（`DATABASE_URL`はPostgresプラグインの
    「Variable Reference」機能で自動注入されるものを使う。`PORT`はRailwayが自動注入するため設定不要）:
 
    | 変数名 | 値 |
@@ -91,7 +90,21 @@ railway connect Postgres
 ```
 \i go-api/migrations/001_initial_schema.sql
 \i go-api/migrations/002_add_watchlist_stock_name.sql
+\i go-api/migrations/003_create_daily_prices.sql
 ```
+
+> **既にRedisプラグインを追加済みの環境について:** go-apiは2026-09-24以降Redisを一切参照しない。
+> Railwayプロジェクトに残っているRedisプラグインと`REDIS_URL`の変数参照は削除してよい。
+
+> **既存環境のアップグレード手順（2026-09-24）:** `003_create_daily_prices.sql` は
+> **新しいgo-apiイメージをデプロイする前に**適用すること。テーブルが無い状態でgo-apiが起動すると、
+> 起動時バックフィルが全銘柄で失敗し、そのプロセスの間は再試行されない。
+> デプロイ後に適用してしまった場合は、go-apiサービスを再起動して起動時バックフィルをやり直す。
+> 適用後は以下で各銘柄におよそ500行（約2年分）入っていることを確認する:
+>
+> ```sql
+> SELECT stock_code, count(*), min(date), max(date) FROM daily_prices GROUP BY stock_code;
+> ```
 
 ## 5. go-api / python-engine のデプロイ確認
 

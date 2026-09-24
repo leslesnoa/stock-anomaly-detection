@@ -55,41 +55,43 @@ func (m *MockNotificationRepository) Save(ctx context.Context, n notification.No
 	return m.Called(ctx, n).Error(0)
 }
 
-// MockPriceCacheForNotifyTest は stock.PriceCache のモック実装（notify用）
-type MockPriceCacheForNotifyTest struct{ mock.Mock }
+// MockPriceRepositoryForNotifyTest は stock.PriceRepository のモック実装（notify用）。
+// monitor_notify_test.go は内部テストパッケージ（package usecase）のため、
+// usecase_test 側の MockPriceRepository を使い回せず別途定義している。
+type MockPriceRepositoryForNotifyTest struct{ mock.Mock }
 
-func (m *MockPriceCacheForNotifyTest) Push(code stock.StockCode, price stock.Price) error {
-	return m.Called(code, price).Error(0)
+func (m *MockPriceRepositoryForNotifyTest) Save(ctx context.Context, code stock.StockCode, quote stock.Quote) error {
+	return m.Called(ctx, code, quote).Error(0)
 }
 
-func (m *MockPriceCacheForNotifyTest) GetHistory(code stock.StockCode, n int) ([]stock.Price, error) {
-	args := m.Called(code, n)
+func (m *MockPriceRepositoryForNotifyTest) SaveAll(ctx context.Context, code stock.StockCode, quotes []stock.Quote) error {
+	return m.Called(ctx, code, quotes).Error(0)
+}
+
+func (m *MockPriceRepositoryForNotifyTest) FindRecent(ctx context.Context, code stock.StockCode, n int) ([]stock.Quote, error) {
+	args := m.Called(ctx, code, n)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]stock.Price), args.Error(1)
+	return args.Get(0).([]stock.Quote), args.Error(1)
 }
 
-func (m *MockPriceCacheForNotifyTest) LastDate(code stock.StockCode) (string, error) {
-	args := m.Called(code)
+func (m *MockPriceRepositoryForNotifyTest) LatestDate(ctx context.Context, code stock.StockCode) (string, error) {
+	args := m.Called(ctx, code)
 	return args.String(0), args.Error(1)
-}
-
-func (m *MockPriceCacheForNotifyTest) SetLastDate(code stock.StockCode, date string) error {
-	return m.Called(code, date).Error(0)
 }
 
 // TestMonitorUsecase_Notify_WithNilNotifyUsecase は、notifyUsecase が nil の場合、
 // notify が何もせずに正常に完了することを検証する。
 func TestMonitorUsecase_Notify_WithNilNotifyUsecase(t *testing.T) {
-	cache := &MockPriceCacheForNotifyTest{}
+	prices := &MockPriceRepositoryForNotifyTest{}
 	detector := anomaly.NewDetectionService()
 	fetcher := &mockNotifyFetcher{}
 
 	code, _ := stock.NewStockCode("7203")
 
 	// notifyUsecase を nil で作成
-	monitor := NewMonitorUsecase(fetcher, cache, detector, 2.5, nil)
+	monitor := NewMonitorUsecase(fetcher, prices, detector, 2.5, nil)
 
 	// z-score を適当な値で notify を呼ぶ
 	z := anomaly.ZScore(3.0)
@@ -97,15 +99,15 @@ func TestMonitorUsecase_Notify_WithNilNotifyUsecase(t *testing.T) {
 	// 何もセットアップせず呼ぶ - パニックせず正常に完了するはず
 	monitor.notify(context.Background(), code, z)
 
-	// ここで検証: cache には何も呼ばれないはず
-	cache.AssertNotCalled(t, "GetHistory")
+	// ここで検証: リポジトリには何も呼ばれないはず
+	prices.AssertNotCalled(t, "FindRecent", mock.Anything, mock.Anything, mock.Anything)
 }
 
 // TestMonitorUsecase_Notify_ExtractsCurrentPriceCorrectly は、
-// キャッシュから取得した価格履歴から currentPrice が正しく抽出されることを検証する。
+// 価格リポジトリから取得した価格履歴から currentPrice が正しく抽出されることを検証する。
 // 特に、末尾の要素が currentPrice であること。
 func TestMonitorUsecase_Notify_ExtractsCurrentPriceCorrectly(t *testing.T) {
-	cache := &MockPriceCacheForNotifyTest{}
+	prices := &MockPriceRepositoryForNotifyTest{}
 	detector := anomaly.NewDetectionService()
 	fetcher := &mockNotifyFetcher{}
 
@@ -119,12 +121,17 @@ func TestMonitorUsecase_Notify_ExtractsCurrentPriceCorrectly(t *testing.T) {
 	notificationsRepo := &MockNotificationRepository{}
 
 	// 価格データ: 最後の要素が 130.0
-	prices := []stock.Price{90, 110, 100, 120, 130}
+	quotes := []stock.Quote{
+		{Price: 90, Date: "2026-07-01"},
+		{Price: 110, Date: "2026-07-02"},
+		{Price: 100, Date: "2026-07-03"},
+		{Price: 120, Date: "2026-07-06"},
+		{Price: 130, Date: "2026-07-07"},
+	}
 	expectedCurrentPrice := 130.0 // 末尾要素
 	floatPrices := []float64{90, 110, 100, 120, 130}
 
-	// キャッシュから prices を返す
-	cache.On("GetHistory", code, historySize).Return(prices, nil)
+	prices.On("FindRecent", mock.Anything, code, historySize).Return(quotes, nil)
 
 	// AnalyzeAndNotifyUsecase.Handle が currentPrice=130.0 で呼ばれることを期待
 	newsFetcher.On("FetchRecent", code).Return(nil, nil)
@@ -138,7 +145,7 @@ func TestMonitorUsecase_Notify_ExtractsCurrentPriceCorrectly(t *testing.T) {
 	analyzeUsecase := NewAnalyzeAndNotifyUsecase(newsFetcher, analyzer, reportGen, notif, notificationsRepo)
 
 	// MonitorUsecase に AnalyzeAndNotifyUsecase を渡す
-	monitor := NewMonitorUsecase(fetcher, cache, detector, 2.5, analyzeUsecase)
+	monitor := NewMonitorUsecase(fetcher, prices, detector, 2.5, analyzeUsecase)
 
 	// notify を呼ぶ
 	z := anomaly.ZScore(3.0)
@@ -158,14 +165,14 @@ func TestMonitorUsecase_Notify_ExtractsCurrentPriceCorrectly(t *testing.T) {
 	require.Len(t, passedPrices, 5)
 	assert.Equal(t, expectedCurrentPrice, passedPrices[len(passedPrices)-1], "末尾の価格が currentPrice と同じであること")
 
-	cache.AssertCalled(t, "GetHistory", code, historySize)
+	prices.AssertCalled(t, "FindRecent", mock.Anything, code, historySize)
 }
 
 // TestMonitorUsecase_Notify_HandlesEmptyHistoryGracefully は、
-// キャッシュから価格履歴が取得できない場合、notify が
+// 価格リポジトリから価格履歴が取得できない場合、notify が
 // gracefully に処理を終了することを検証する。
 func TestMonitorUsecase_Notify_HandlesEmptyHistoryGracefully(t *testing.T) {
-	cache := &MockPriceCacheForNotifyTest{}
+	prices := &MockPriceRepositoryForNotifyTest{}
 	detector := anomaly.NewDetectionService()
 	fetcher := &mockNotifyFetcher{}
 
@@ -178,8 +185,8 @@ func TestMonitorUsecase_Notify_HandlesEmptyHistoryGracefully(t *testing.T) {
 	notif := &MockNotifier{}
 	notificationsRepo := &MockNotificationRepository{}
 
-	// GetHistory が空のスライスを返す
-	cache.On("GetHistory", code, historySize).Return([]stock.Price{}, nil)
+	// FindRecent が空のスライスを返す
+	prices.On("FindRecent", mock.Anything, code, historySize).Return([]stock.Quote{}, nil)
 
 	// Handle は呼ばれないので期待値を設定しない
 
@@ -187,7 +194,7 @@ func TestMonitorUsecase_Notify_HandlesEmptyHistoryGracefully(t *testing.T) {
 	analyzeUsecase := NewAnalyzeAndNotifyUsecase(newsFetcher, analyzer, reportGen, notif, notificationsRepo)
 
 	// MonitorUsecase に AnalyzeAndNotifyUsecase を渡す
-	monitor := NewMonitorUsecase(fetcher, cache, detector, 2.5, analyzeUsecase)
+	monitor := NewMonitorUsecase(fetcher, prices, detector, 2.5, analyzeUsecase)
 
 	// notify を呼ぶ - パニックせずに完了するはず
 	z := anomaly.ZScore(3.0)
@@ -196,14 +203,14 @@ func TestMonitorUsecase_Notify_HandlesEmptyHistoryGracefully(t *testing.T) {
 	// 検証: Analyzer.Analyze が呼ばれないこと
 	analyzer.AssertNotCalled(t, "Analyze")
 
-	// GetHistory は呼ばれたが、中身が空なので Handle には進まない
-	cache.AssertCalled(t, "GetHistory", code, historySize)
+	// FindRecent は呼ばれたが、中身が空なので Handle には進まない
+	prices.AssertCalled(t, "FindRecent", mock.Anything, code, historySize)
 }
 
 // TestMonitorUsecase_Notify_HandleCallWithCorrectZScore は、
 // z-score が正しく Handle に渡されることを検証する。
 func TestMonitorUsecase_Notify_HandleCallWithCorrectZScore(t *testing.T) {
-	cache := &MockPriceCacheForNotifyTest{}
+	prices := &MockPriceRepositoryForNotifyTest{}
 	detector := anomaly.NewDetectionService()
 	fetcher := &mockNotifyFetcher{}
 
@@ -217,13 +224,16 @@ func TestMonitorUsecase_Notify_HandleCallWithCorrectZScore(t *testing.T) {
 	notificationsRepo := &MockNotificationRepository{}
 
 	// 価格データ
-	prices := []stock.Price{100, 105, 110}
+	quotes := []stock.Quote{
+		{Price: 100, Date: "2026-07-06"},
+		{Price: 105, Date: "2026-07-07"},
+		{Price: 110, Date: "2026-07-08"},
+	}
 	floatPrices := []float64{100, 105, 110}
 	expectedCurrentPrice := 110.0
 	expectedZScore := 2.5 // テスト用の z-score
 
-	// キャッシュから prices を返す
-	cache.On("GetHistory", code, historySize).Return(prices, nil)
+	prices.On("FindRecent", mock.Anything, code, historySize).Return(quotes, nil)
 
 	// Analyzer.Analyze が expectedZScore で呼ばれることを期待
 	newsFetcher.On("FetchRecent", code).Return(nil, nil)
@@ -237,7 +247,7 @@ func TestMonitorUsecase_Notify_HandleCallWithCorrectZScore(t *testing.T) {
 	analyzeUsecase := NewAnalyzeAndNotifyUsecase(newsFetcher, analyzer, reportGen, notif, notificationsRepo)
 
 	// MonitorUsecase に AnalyzeAndNotifyUsecase を渡す
-	monitor := NewMonitorUsecase(fetcher, cache, detector, 2.5, analyzeUsecase)
+	monitor := NewMonitorUsecase(fetcher, prices, detector, 2.5, analyzeUsecase)
 
 	// notify を呼ぶ
 	z := anomaly.ZScore(expectedZScore)
