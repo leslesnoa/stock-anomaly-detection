@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"log"
 	"math"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/anomaly"
@@ -107,6 +108,8 @@ func (u *GetStockChartUsecase) Handle(ctx context.Context, userID, rawStockCode 
 		if z, err := u.detector.Calculate(floatPrices); err == nil {
 			zf := float64(z)
 			chart.CurrentZScore = &zf
+		} else {
+			log.Printf("WARN z-score calculation failed for %s: %v", code, err)
 		}
 	}
 
@@ -115,13 +118,17 @@ func (u *GetStockChartUsecase) Handle(ctx context.Context, userID, rawStockCode 
 		for i, q := range quotes {
 			floatPrices[i] = float64(q.Price)
 		}
-		if f, err := u.forecaster.Forecast(code, *chart.CurrentPrice, floatPrices); err == nil {
+		if f, err := u.forecaster.Forecast(ctx, code, *chart.CurrentPrice, floatPrices); err == nil {
 			chart.Forecast = &f
+		} else {
+			log.Printf("WARN forecast failed for %s: %v", code, err)
 		}
 	}
 
 	if notifications, err := u.notifications.FindByStockCode(ctx, code.String()); err == nil {
 		chart.Notifications = notifications
+	} else {
+		log.Printf("WARN notification history fetch failed for %s: %v", code, err)
 	}
 
 	return chart, nil

@@ -1,6 +1,7 @@
 package gateway_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -102,7 +103,7 @@ func TestPythonEngineClient_Forecast(t *testing.T) {
 		prices[i] = 3000.0 + float64(i)
 	}
 
-	got, err := client.Forecast(code, 3250.0, prices)
+	got, err := client.Forecast(context.Background(), code, 3250.0, prices)
 	require.NoError(t, err)
 	assert.Equal(t, 20, got.Horizon)
 	require.Len(t, got.Points, 1)
@@ -123,6 +124,6 @@ func TestPythonEngineClient_Forecast_ServerError(t *testing.T) {
 	client := gateway.NewPythonEngineClient(srv.URL)
 	code, _ := stock.NewStockCode("7203")
 
-	_, err := client.Forecast(code, 3250.0, make([]float64, 121))
+	_, err := client.Forecast(context.Background(), code, 3250.0, make([]float64, 121))
 	require.Error(t, err)
 }

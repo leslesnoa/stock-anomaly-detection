@@ -1,6 +1,10 @@
 package forecast
 
-import "github.com/stock-anomaly-detection/go-api/internal/domain/stock"
+import (
+	"context"
+
+	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
+)
 
 type Point struct {
 	Step    int
@@ -20,5 +24,5 @@ type Forecast struct {
 // 点予測ではなく方向とレンジ帯を返す方針は
 // docs/superpowers/specs/2026-09-24-stock-chart-forecast-design.md 参照。
 type Forecaster interface {
-	Forecast(code stock.StockCode, currentPrice float64, prices []float64) (Forecast, error)
+	Forecast(ctx context.Context, code stock.StockCode, currentPrice float64, prices []float64) (Forecast, error)
 }

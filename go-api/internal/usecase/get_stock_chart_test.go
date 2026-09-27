@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/anomaly"
@@ -40,7 +41,7 @@ func TestGetStockChartUsecase_Success(t *testing.T) {
 	prices.On("FindRecent", mock.Anything, code, mock.Anything).Return(quotes, nil)
 
 	forecaster := new(MockForecaster)
-	forecaster.On("Forecast", code, mock.Anything, mock.Anything).
+	forecaster.On("Forecast", mock.Anything, code, mock.Anything, mock.Anything).
 		Return(forecast.Forecast{Horizon: 20, Points: []forecast.Point{{Step: 1, Center: 1200}}}, nil)
 
 	notifications := new(MockNotificationRepository)
@@ -95,7 +96,7 @@ func TestGetStockChartUsecase_InsufficientHistory_ForecastAndZScoreNil(t *testin
 	assert.Empty(t, chart.AlertBand)
 	assert.Nil(t, chart.CurrentZScore)
 	assert.Nil(t, chart.Forecast)
-	forecaster.AssertNotCalled(t, "Forecast", mock.Anything, mock.Anything, mock.Anything)
+	forecaster.AssertNotCalled(t, "Forecast", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestGetStockChartUsecase_ForecasterError_ForecastNilButNoError(t *testing.T) {
@@ -108,7 +109,7 @@ func TestGetStockChartUsecase_ForecasterError_ForecastNilButNoError(t *testing.T
 	prices.On("FindRecent", mock.Anything, code, mock.Anything).Return(quotes, nil)
 
 	forecaster := new(MockForecaster)
-	forecaster.On("Forecast", code, mock.Anything, mock.Anything).
+	forecaster.On("Forecast", mock.Anything, code, mock.Anything, mock.Anything).
 		Return(forecast.Forecast{}, errors.New("python engine down"))
 
 	notifications := new(MockNotificationRepository)
@@ -151,4 +152,67 @@ func TestGetStockChartUsecase_InvalidStockCode_ReturnsError(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, stock.ErrInvalidStockCode)
 	watchlists.AssertNotCalled(t, "FindByUserID", mock.Anything, mock.Anything)
+}
+
+// TestGetStockChartUsecase_AlertBandConsistentWithDetector は
+// computeAlertBand（get_stock_chart.go）が独自に再実装している平均・標準偏差の計算が、
+// anomaly.DetectionService.Calculate と同じ窓（末尾30件、先頭29件が履歴）で
+// 同じ統計量に一致し続けることを保証する回帰ガード。computeAlertBand自体は変更しない
+// （anomaly/service.go同様、このテストのみでバインドする）。
+func TestGetStockChartUsecase_AlertBandConsistentWithDetector(t *testing.T) {
+	code, _ := stock.NewStockCode("7203")
+	watchlists := new(mockWatchlistRepository)
+	watchlists.On("FindByUserID", mock.Anything, "user-1").Return([]watchlist.Watchlist{{StockCode: code}}, nil)
+
+	quotes := buildQuotes(35)
+	prices := new(MockPriceRepository)
+	prices.On("FindRecent", mock.Anything, code, mock.Anything).Return(quotes, nil)
+
+	// forecastMinPrices(121) 未満なので forecaster は呼ばれない
+	forecaster := new(MockForecaster)
+	notifications := new(MockNotificationRepository)
+	notifications.On("FindByStockCode", mock.Anything, "7203").Return([]notification.Notification{}, nil)
+
+	uc := newChartUsecase(t, watchlists, prices, forecaster, notifications)
+	chart, err := uc.Handle(context.Background(), "user-1", "7203")
+	require.NoError(t, err)
+	require.NotEmpty(t, chart.AlertBand)
+
+	// computeAlertBandの末尾要素と同じ窓（末尾30件、先頭29件が履歴）を
+	// anomaly.DetectionService.Calculate に渡し、統計量が一致することを確認する。
+	window := quotes[len(quotes)-30:]
+	windowPrices := make([]float64, len(window))
+	for i, q := range window {
+		windowPrices[i] = float64(q.Price)
+	}
+
+	detector := anomaly.NewDetectionService()
+	z, err := detector.Calculate(windowPrices)
+	require.NoError(t, err)
+
+	history := windowPrices[:len(windowPrices)-1]
+	mean := 0.0
+	for _, p := range history {
+		mean += p
+	}
+	mean /= float64(len(history))
+
+	variance := 0.0
+	for _, p := range history {
+		diff := p - mean
+		variance += diff * diff
+	}
+	stddev := math.Sqrt(variance / float64(len(history)))
+
+	current := windowPrices[len(windowPrices)-1]
+	expectedZ := (current - mean) / stddev
+	assert.InDelta(t, expectedZ, float64(z), 1e-9)
+
+	last := chart.AlertBand[len(chart.AlertBand)-1]
+	const threshold = 2.5 // newChartUsecase に渡している閾値と一致させる
+	assert.InDelta(t, mean+threshold*stddev, last.Upper, 1e-9)
+	assert.InDelta(t, mean-threshold*stddev, last.Lower, 1e-9)
+
+	require.NotNil(t, chart.CurrentZScore)
+	assert.InDelta(t, expectedZ, float64(*chart.CurrentZScore), 1e-9)
 }

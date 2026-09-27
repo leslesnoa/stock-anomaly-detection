@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -117,7 +118,7 @@ type forecastResponseDTO struct {
 	Points    []forecastPointDTO `json:"points"`
 }
 
-func (c *PythonEngineClient) Forecast(code stock.StockCode, currentPrice float64, prices []float64) (forecast.Forecast, error) {
+func (c *PythonEngineClient) Forecast(ctx context.Context, code stock.StockCode, currentPrice float64, prices []float64) (forecast.Forecast, error) {
 	reqBody, err := json.Marshal(forecastRequest{
 		StockCode:    code.String(),
 		CurrentPrice: currentPrice,
@@ -127,7 +128,7 @@ func (c *PythonEngineClient) Forecast(code stock.StockCode, currentPrice float64
 		return forecast.Forecast{}, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/forecast", bytes.NewReader(reqBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/forecast", bytes.NewReader(reqBody))
 	if err != nil {
 		return forecast.Forecast{}, err
 	}
