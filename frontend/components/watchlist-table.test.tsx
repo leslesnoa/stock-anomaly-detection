@@ -47,6 +47,24 @@ describe("WatchlistTable", () => {
     expect(screen.getByText("-")).toBeInTheDocument();
   });
 
+  it("links the stock code to its detail page", () => {
+    render(
+      <WatchlistTable
+        items={[
+          {
+            id: "1",
+            stock_code: "7203",
+            stock_name: "Toyota Motor Corporation",
+            alert_threshold: 2.5,
+          },
+        ]}
+      />,
+    );
+
+    const link = screen.getByRole("link", { name: "7203" });
+    expect(link).toHaveAttribute("href", "/stocks/7203");
+  });
+
   it("shows an empty state when items is empty", () => {
     render(<WatchlistTable items={[]} />);
 
