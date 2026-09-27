@@ -106,3 +106,52 @@ export async function removeWatchlistItem(
   }
   return toFailure(res);
 }
+
+export type StockChartPrice = { date: string; close: number };
+export type StockChartAlertBand = {
+  date: string;
+  upper: number;
+  lower: number;
+};
+export type StockChartForecastPoint = {
+  step: number;
+  center: number;
+  upper_68: number;
+  lower_68: number;
+  upper_95: number;
+  lower_95: number;
+};
+export type StockChartForecast = {
+  horizon: number;
+  points: StockChartForecastPoint[];
+};
+export type StockChartNotification = {
+  notified_at: string;
+  anomaly_score: number;
+  ai_report: string;
+  slack_sent: boolean;
+};
+export type StockChart = {
+  stock_code: string;
+  current_price: number | null;
+  prices: StockChartPrice[];
+  alert_band: StockChartAlertBand[];
+  current_z_score: number | null;
+  forecast: StockChartForecast | null;
+  notifications: StockChartNotification[];
+};
+
+export async function fetchStockChart(
+  token: string,
+  stockCode: string,
+): Promise<{ ok: true; chart: StockChart } | ApiFailure> {
+  const res = await fetch(`${getGoApiUrl()}/stocks/${stockCode}/chart`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (res.status === 200) {
+    const chart = (await res.json()) as StockChart;
+    return { ok: true, chart };
+  }
+  return toFailure(res);
+}
