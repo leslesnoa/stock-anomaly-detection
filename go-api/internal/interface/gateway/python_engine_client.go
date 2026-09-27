@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/analysis"
+	"github.com/stock-anomaly-detection/go-api/internal/domain/forecast"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 )
 
@@ -91,4 +92,68 @@ func (c *PythonEngineClient) Analyze(code stock.StockCode, zScore, currentPrice 
 			Lower:  result.Indicators.Bollinger.Lower,
 		},
 	}, nil
+}
+
+var _ forecast.Forecaster = (*PythonEngineClient)(nil)
+
+type forecastRequest struct {
+	StockCode    string    `json:"stock_code"`
+	CurrentPrice float64   `json:"current_price"`
+	Prices       []float64 `json:"prices"`
+}
+
+type forecastPointDTO struct {
+	Step    int     `json:"step"`
+	Center  float64 `json:"center"`
+	Upper68 float64 `json:"upper_68"`
+	Lower68 float64 `json:"lower_68"`
+	Upper95 float64 `json:"upper_95"`
+	Lower95 float64 `json:"lower_95"`
+}
+
+type forecastResponseDTO struct {
+	StockCode string             `json:"stock_code"`
+	Horizon   int                `json:"horizon"`
+	Points    []forecastPointDTO `json:"points"`
+}
+
+func (c *PythonEngineClient) Forecast(code stock.StockCode, currentPrice float64, prices []float64) (forecast.Forecast, error) {
+	reqBody, err := json.Marshal(forecastRequest{
+		StockCode:    code.String(),
+		CurrentPrice: currentPrice,
+		Prices:       prices,
+	})
+	if err != nil {
+		return forecast.Forecast{}, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/forecast", bytes.NewReader(reqBody))
+	if err != nil {
+		return forecast.Forecast{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return forecast.Forecast{}, fmt.Errorf("call python engine: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return forecast.Forecast{}, fmt.Errorf("python engine returned status %d", resp.StatusCode)
+	}
+
+	var result forecastResponseDTO
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return forecast.Forecast{}, fmt.Errorf("decode response: %w", err)
+	}
+
+	points := make([]forecast.Point, len(result.Points))
+	for i, p := range result.Points {
+		points[i] = forecast.Point{
+			Step: p.Step, Center: p.Center,
+			Upper68: p.Upper68, Lower68: p.Lower68,
+			Upper95: p.Upper95, Lower95: p.Lower95,
+		}
+	}
+	return forecast.Forecast{Horizon: result.Horizon, Points: points}, nil
 }
