@@ -12,9 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/anomaly"
-	"github.com/stock-anomaly-detection/go-api/internal/infrastructure/cache"
 	"github.com/stock-anomaly-detection/go-api/internal/infrastructure/persistence"
 	"github.com/stock-anomaly-detection/go-api/internal/interface/gateway"
 	"github.com/stock-anomaly-detection/go-api/internal/interface/handler"
@@ -23,11 +21,14 @@ import (
 
 const watchlistRefreshInterval = 5 * time.Minute
 
+// startupBackfillInterval は起動時バックフィルで銘柄間に挟むウェイト。
+// Yahoo Finance へ一斉にリクエストを投げないための間隔。
+const startupBackfillInterval = 2 * time.Second
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	redisURL := mustEnv("REDIS_URL")
 	anthropicAPIKey := mustEnv("ANTHROPIC_API_KEY")
 	slackWebhookURL := mustEnv("SLACK_WEBHOOK_URL")
 	pythonEngineURL := mustEnv("PYTHON_ENGINE_URL")
@@ -61,13 +62,6 @@ func main() {
 		}
 	}
 
-	opt, err := redis.ParseURL(redisURL)
-	if err != nil {
-		log.Fatalf("invalid REDIS_URL: %v", err)
-	}
-	redisClient := redis.NewClient(opt)
-	defer redisClient.Close()
-
 	databaseURL := mustEnv("DATABASE_URL")
 	pool, err := persistence.Connect(ctx, databaseURL)
 	if err != nil {
@@ -75,7 +69,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	priceCache := cache.NewRedisPriceCache(redisClient)
+	priceRepo := persistence.NewPgPriceRepository(pool)
 	priceFetcher := gateway.NewYahooFinanceClient()
 	newsClient := gateway.NewYanoshinTDnetClient()
 	pythonEngineClient := gateway.NewPythonEngineClient(pythonEngineURL)
@@ -84,8 +78,8 @@ func main() {
 	notificationRepo := persistence.NewPgNotificationRepository(pool)
 	notifyUsecase := usecase.NewAnalyzeAndNotifyUsecase(newsClient, pythonEngineClient, claudeClient, slackClient, notificationRepo)
 	detector := anomaly.NewDetectionService()
-	monitor := usecase.NewMonitorUsecase(priceFetcher, priceCache, detector, threshold, notifyUsecase)
-	backfillUsecase := usecase.NewBackfillPriceHistoryUsecase(priceFetcher, priceCache)
+	monitor := usecase.NewMonitorUsecase(priceFetcher, priceRepo, detector, threshold, notifyUsecase)
+	backfillUsecase := usecase.NewBackfillPriceHistoryUsecase(priceFetcher, priceRepo)
 
 	userRepo := persistence.NewPgUserRepository(pool)
 	watchlistRepo := persistence.NewPgWatchlistRepository(pool)
@@ -121,6 +115,22 @@ func main() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("http server: %v", err)
 		}
+	}()
+
+	// 起動時バックフィル: daily_prices に十分な履歴（historySize件）が無い銘柄をYahooから取得して埋める。
+	// 2026-09-24以前の旧Redisキャッシュには日付が保存されていなかったため移行できず、既存銘柄は
+	// ここで取り直す。historySize件以上の履歴がある銘柄は Run がDB参照1回でスキップするので、
+	// 2回目以降の起動では実質ノーオペレーションになる。
+	// HTTPサーバーと監視ループを待たせないよう goroutine で回す。
+	go func() {
+		codes, err := watchlistRepo.FindAllStockCodes(ctx)
+		if err != nil {
+			log.Printf("ERROR fetch watchlist codes for startup backfill: %v", err)
+			return
+		}
+		log.Printf("startup backfill: checking %d stocks", len(codes))
+		backfillUsecase.RunAll(ctx, codes, startupBackfillInterval)
+		log.Println("startup backfill finished")
 	}()
 
 	log.Printf("monitoring watchlist stocks (threshold=%.1fσ, poll=%02d:%02d JST, refresh=%s)",

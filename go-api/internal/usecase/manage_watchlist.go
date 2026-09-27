@@ -56,7 +56,7 @@ func (u *ManageWatchlistUsecase) Add(ctx context.Context, userID, rawStockCode s
 		return watchlist.Watchlist{}, err
 	}
 	if u.backfiller != nil {
-		if err := u.backfiller.Run(code); err != nil {
+		if err := u.backfiller.Run(ctx, code); err != nil {
 			log.Printf("ERROR backfill price history %s: %v", code, err)
 		}
 	}

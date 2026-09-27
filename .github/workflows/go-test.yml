@@ -26,16 +26,6 @@ jobs:
         ports:
           - 5432:5432
 
-      redis:
-        image: redis:7
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
     steps:
       - uses: actions/checkout@v4
 
@@ -53,6 +43,7 @@ jobs:
         run: |
           psql $DATABASE_URL -f go-api/migrations/001_initial_schema.sql
           psql $DATABASE_URL -f go-api/migrations/002_add_watchlist_stock_name.sql
+          psql $DATABASE_URL -f go-api/migrations/003_create_daily_prices.sql
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/stock_anomaly_test?sslmode=disable
 
@@ -61,7 +52,6 @@ jobs:
         run: go test -race ./...
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/stock_anomaly_test?sslmode=disable
-          REDIS_URL: redis://localhost:6379
 
       - name: Build
         working-directory: go-api
