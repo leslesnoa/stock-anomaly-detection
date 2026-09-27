@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { StockChart } from "./stock-chart";
-import type { StockChart as StockChartData } from "@/lib/go-api-client";
+import { StockChart, sliceToDisplayWindow } from "./stock-chart";
+import type {
+  StockChart as StockChartData,
+  StockChartPrice,
+  StockChartAlertBand,
+} from "@/lib/go-api-client";
 
 // jsdomは ResizeObserver を実装しておらず、実測レイアウト（offsetWidth/offsetHeight・
 // getBoundingClientRect）も常に0を返す。Rechartsの ResponsiveContainer はこれらが無いと
@@ -135,5 +139,80 @@ describe("StockChart", () => {
     expect(
       screen.getByText(/直近120営業日の対数リターンの平均と標準偏差/),
     ).toBeInTheDocument();
+  });
+
+  it("renders a marker on the JST calendar date, not the UTC calendar date, of the notification", async () => {
+    // "2026-09-01T20:00:00Z" is 2026-09-02T05:00:00+09:00 in JST: UTC slice()
+    // gives "2026-09-01" but the JST calendar date (which matches prices[].date,
+    // a JST trading date) is "2026-09-02". `prices` below deliberately has NO
+    // "2026-09-01" row — only "2026-09-02" — so if notificationByDate were keyed
+    // by the naive UTC slice, the lookup key ("2026-09-01") would match no price
+    // row at all and the marker would silently vanish. This is the regression
+    // this test guards: with the JST fix, the marker renders on "2026-09-02";
+    // without it, zero markers render.
+    const data: StockChartData = {
+      ...baseData,
+      prices: [{ date: "2026-09-02", close: 3250.0 }],
+      alert_band: [],
+      notifications: [
+        {
+          notified_at: "2026-09-01T20:00:00Z",
+          anomaly_score: 3.1,
+          ai_report: "急騰の背景には...",
+          slack_sent: true,
+        },
+      ],
+    };
+
+    const { container } = render(<StockChart data={data} />);
+    // ResponsiveContainerのサイズ確定を待つ。
+    await screen.findByText("終値");
+    expect(container.querySelectorAll(".recharts-reference-dot").length).toBe(
+      1,
+    );
+  });
+});
+
+describe("sliceToDisplayWindow", () => {
+  function buildPrices(n: number): StockChartPrice[] {
+    return Array.from({ length: n }, (_, i) => ({
+      date: `2026-01-${String((i % 28) + 1).padStart(2, "0")}`,
+      close: 1000 + i,
+    }));
+  }
+
+  function buildAlertBand(n: number): StockChartAlertBand[] {
+    return Array.from({ length: n }, (_, i) => ({
+      date: `2026-01-${String((i % 28) + 1).padStart(2, "0")}`,
+      upper: 1100 + i,
+      lower: 900 + i,
+    }));
+  }
+
+  it("keeps all entries when at or under the display window size", () => {
+    const data: StockChartData = {
+      ...baseData,
+      prices: buildPrices(100),
+      alert_band: buildAlertBand(100),
+    };
+    const sliced = sliceToDisplayWindow(data);
+    expect(sliced.prices).toHaveLength(100);
+    expect(sliced.alert_band).toHaveLength(100);
+  });
+
+  it("slices prices and alert_band down to the display window when longer, keeping the most recent entries", () => {
+    const prices = buildPrices(200);
+    const alertBand = buildAlertBand(200);
+    const data: StockChartData = { ...baseData, prices, alert_band: alertBand };
+
+    const sliced = sliceToDisplayWindow(data);
+
+    expect(sliced.prices.length).toBeLessThan(200);
+    expect(sliced.prices).toHaveLength(126);
+    expect(sliced.alert_band).toHaveLength(126);
+    // 末尾（最新）が保持されている＝予測のアンカーになる最終価格は変わらない。
+    expect(sliced.prices[sliced.prices.length - 1]).toEqual(
+      prices[prices.length - 1],
+    );
   });
 });

@@ -145,10 +145,13 @@ export async function fetchStockChart(
   token: string,
   stockCode: string,
 ): Promise<{ ok: true; chart: StockChart } | ApiFailure> {
-  const res = await fetch(`${getGoApiUrl()}/stocks/${stockCode}/chart`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
+  const res = await fetch(
+    `${getGoApiUrl()}/stocks/${encodeURIComponent(stockCode)}/chart`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    },
+  );
   if (res.status === 200) {
     const chart = (await res.json()) as StockChart;
     return { ok: true, chart };

@@ -24,6 +24,10 @@ export default async function StockDetailPage({
     if (result.status === 404) {
       notFound();
     }
+    if (result.status === 400) {
+      // 不正な証券コード形式（手動でのURL編集など）。存在しない銘柄と同じ見た目にする。
+      notFound();
+    }
     throw new Error(result.error);
   }
 

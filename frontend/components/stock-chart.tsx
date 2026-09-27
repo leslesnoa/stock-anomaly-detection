@@ -16,6 +16,22 @@ import type {
   StockChartNotification,
 } from "@/lib/go-api-client";
 
+// デフォルト表示期間: 直近約6ヶ月分の取引日数（1ヶ月≒21営業日 × 6）。
+// 1M/3M/6M/1Y/2Yのレンジ切り替えUIは後続タスクで追加予定（このフィックスの対象外）。
+const DISPLAY_TRADING_DAYS = 126;
+
+// 表示用に直近DISPLAY_TRADING_DAYS件へ絞り込む。予測の起点（最新の価格・日付）は
+// 絞り込み後も変わらない（sliceは末尾を保持するため）ので、buildRowsの予測アンカリングには
+// 影響しない。notificationsは絞り込まない: markerRows は絞り込み後のrows（data.prices由来）
+// に存在する日付としか一致しないため、絞り込みは自然に反映される。
+export function sliceToDisplayWindow(data: StockChartData): StockChartData {
+  return {
+    ...data,
+    prices: data.prices.slice(-DISPLAY_TRADING_DAYS),
+    alert_band: data.alert_band.slice(-DISPLAY_TRADING_DAYS),
+  };
+}
+
 type ChartRow = {
   date: string;
   close?: number;
@@ -41,18 +57,32 @@ function addBusinessDays(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// notified_at（TIMESTAMPTZ、UTC基準でJSON化される）をJSTの暦日に変換する。
+// prices[].date はJSTの取引日であり、単純にnotified_atをUTCスライスすると
+// POLL_TIME（デフォルト16:00 JST=07:00Z）より前の時刻ではUTC暦日がJSTの前日に
+// ずれてしまい、その日のprices[].dateと一致せずマーカーが消える。
+function toJstDate(isoString: string): string {
+  const d = new Date(isoString);
+  const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return jst.toISOString().slice(0, 10);
+}
+
 function buildRows(data: StockChartData): ChartRow[] {
   const alertByDate = new Map(data.alert_band.map((b) => [b.date, b]));
   // 同一日に複数回発火した場合は最新の通知を優先する（末尾優先でMapに詰める）。
   const notificationByDate = new Map(
-    data.notifications.map((n) => [n.notified_at.slice(0, 10), n]),
+    data.notifications.map((n) => [toJstDate(n.notified_at), n]),
   );
-  const rows: ChartRow[] = data.prices.map((p) => {
+  const rows: ChartRow[] = data.prices.map((p, i) => {
     const band = alertByDate.get(p.date);
+    const isLast = i === data.prices.length - 1;
     return {
       date: p.date,
       close: p.close,
       alertRange: band ? [band.lower, band.upper] : undefined,
+      // 予測中心線の起点を実績終値の最終点に重ねて、線がつながって見えるようにする
+      // （最終点以外はforecastCenterを持たせない）。
+      forecastCenter: isLast ? p.close : undefined,
       notification: notificationByDate.get(p.date),
     };
   });
@@ -103,7 +133,10 @@ function ChartTooltip({
 }
 
 export function StockChart({ data }: { data: StockChartData }) {
-  const rows = buildRows(data);
+  // 表示は直近約6ヶ月に絞る。sliceは末尾（最新）を保持するため、予測のアンカー
+  // （data.prices の最終要素の日付・終値）は絞り込み前後で変わらない。
+  const displayData = sliceToDisplayWindow(data);
+  const rows = buildRows(displayData);
   const markerRows = rows.filter(
     (r) => r.notification !== undefined && r.close !== undefined,
   );
