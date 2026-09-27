@@ -55,6 +55,14 @@ func (m *MockNotificationRepository) Save(ctx context.Context, n notification.No
 	return m.Called(ctx, n).Error(0)
 }
 
+func (m *MockNotificationRepository) FindByStockCode(ctx context.Context, stockCode string) ([]notification.Notification, error) {
+	args := m.Called(ctx, stockCode)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]notification.Notification), args.Error(1)
+}
+
 // MockPriceRepositoryForNotifyTest は stock.PriceRepository のモック実装（notify用）。
 // monitor_notify_test.go は内部テストパッケージ（package usecase）のため、
 // usecase_test 側の MockPriceRepository を使い回せず別途定義している。
