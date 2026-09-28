@@ -113,6 +113,22 @@ const baseData: StockChartData = {
   ],
 };
 
+// buildPrices()（下部の sliceToDisplayWindow テスト用ヘルパー）は
+// `2026-01-${(i % 28) + 1}` で28日周期の日付を使い回すため、同一サイクル内に
+// 重複日付が生じる。このヘルパーは1日ずつ純増するユニークな連続暦日を返す
+// （営業日/週末は考慮しない。ここでは配列インデックスの件数だけが重要）。
+function buildSequentialPrices(
+  n: number,
+  startDate = "2026-01-01",
+): StockChartPrice[] {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date(start);
+    d.setUTCDate(d.getUTCDate() + i);
+    return { date: d.toISOString().slice(0, 10), close: 1000 + i };
+  });
+}
+
 describe("StockChart", () => {
   it("renders without the unavailable-forecast notice when forecast exists", () => {
     render(<StockChart data={baseData} />);
@@ -202,6 +218,48 @@ describe("StockChart", () => {
     expect(screen.getByRole("button", { name: "6M" })).toHaveAttribute(
       "aria-pressed",
       "false",
+    );
+  });
+
+  it("actually changes the displayed chart data when the period is switched, not just the selected button", async () => {
+    // 150件の連続する日次データを用意する。配列末尾（最新）から数えて:
+    //   - 直近126件（6M, デフォルト）= index 24..149
+    //   - 直近21件（1M）          = index 129..149
+    // 通知はindex 50に置く。50は24以上・129未満なので「6Mには含まれるが
+    // 1Mには含まれない」唯一の帯に入り、期間切り替えで表示/非表示が
+    // 反転するはずの日付になる。もしstock-chart.tsxの該当行が
+    // `sliceToDisplayWindow(data)`（第2引数なし＝常に6M固定）に後退していたら、
+    // 1Mへの切り替え後もマーカーは消えず、このテストは失敗する。
+    const prices = buildSequentialPrices(150);
+    const notifiedDate = prices[50].date;
+    const data: StockChartData = {
+      ...baseData,
+      prices,
+      alert_band: [],
+      notifications: [
+        {
+          notified_at: `${notifiedDate}T00:00:00Z`,
+          anomaly_score: 3.1,
+          ai_report: "急騰の背景には...",
+          slack_sent: true,
+        },
+      ],
+    };
+
+    const { container } = render(<StockChart data={data} />);
+    // ResponsiveContainerのサイズ確定を待つ。
+    await screen.findByText("終値");
+
+    // 6M（デフォルト）ではindex 50は直近126件の窓に入るのでマーカーが1件見える。
+    expect(container.querySelectorAll(".recharts-reference-dot").length).toBe(
+      1,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "1M" }));
+
+    // 1Mに切り替えるとindex 50は直近21件の窓から外れるのでマーカーは消える。
+    expect(container.querySelectorAll(".recharts-reference-dot").length).toBe(
+      0,
     );
   });
 
