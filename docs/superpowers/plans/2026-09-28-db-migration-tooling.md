@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Go 1.24.0（go-api/go.mod）。新規依存は`go get`/`go mod tidy`で解決し、バージョン番号を手で書かない。
+- Go 1.24.0（go-api/go.mod、計画作成時点）。新規依存は`go get`/`go mod tidy`で解決し、バージョン番号を手で書かない — その結果`go.mod`の`go`ディレクティブ自体が引き上がる場合はそれに従う（Task 2実施時に`golang-migrate v4.20.1`の要求により`1.25.11`へ上がった。Task 4でCIの`actions/setup-go`を`go-version-file`方式に変更して追随させる）。
 - 全SQL（up/down問わず）はPostgres 16対応で、`IF EXISTS`/`IF NOT EXISTS`により冪等に書く。
 - 統合テストは既存方針を踏襲: `testing.Short()`または`DATABASE_URL`未設定でスキップする。
 - 既存3マイグレーションのDDL内容（up側）は一切変更しない。リネームのみ（`git mv`で内容が変わらないことを保証する）。
@@ -496,7 +496,36 @@ Expected: `persistence`パッケージの既存リポジトリテスト（`user_
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/stock_anomaly_test?sslmode=disable
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: `actions/setup-go`のバージョン指定を`go-version-file`に切り替える**
+
+**背景（Task 2で判明、コントローラーのルーリング）:** Task 2で`go get github.com/golang-migrate/migrate/v4 && go mod tidy`を実行した結果、`golang-migrate/migrate/v4 v4.20.1`自身の`go.mod`が`go 1.25.11`を要求するため、`go-api/go.mod`の`go`ディレクティブが`1.24.0`から`1.25.11`へ自動的に引き上げられている（Task 2で確認済み・許容済み。バージョン番号を手で書かないというGlobal Constraintsに従った結果であり、正しい）。
+`.github/workflows/go-test.yml`は`go-version: '1.24'`を固定指定しているため、このままでは実際にビルドに使われるGoバージョン（go.modが要求する1.25.11、`GOTOOLCHAIN=auto`により自動ダウンロードされる）とワークフローの表記が食い違う。今後go.modの`go`ディレクティブが変わるたびにこのファイルを追随させる手間を無くすため、固定バージョン指定ではなく`go-version-file`でgo.modから読み取る方式に変更する。
+
+`go-api/go.mod`の該当行:
+```
+go 1.25.11
+```
+（このファイルはTask 2で既に更新済み。このTaskでは変更しない。）
+
+変更前（`.github/workflows/go-test.yml`、`actions/setup-go`ステップ）:
+```yaml
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+          cache-dependency-path: go-api/go.sum
+```
+
+変更後:
+```yaml
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go-api/go.mod
+          cache: true
+          cache-dependency-path: go-api/go.sum
+```
+
+- [ ] **Step 5: Commit**
 
 ```bash
 git add go-api/internal/infrastructure/persistence/main_test.go .github/workflows/go-test.yml
@@ -507,6 +536,13 @@ persistence.RunMigrations is now the only place DATABASE_URL-backed
 tests get their schema from. Removes the CI step that manually ran
 psql per migration file — a step that must be remembered on every new
 migration, which is exactly what caused the PR #20 incident.
+
+Also switches actions/setup-go to go-version-file (reading go-api/go.mod)
+instead of a hardcoded go-version. golang-migrate v4.20.1 itself requires
+go 1.25.11, which go mod tidy already raised go.mod to in the previous
+commit; go-version-file keeps CI in sync with go.mod automatically
+instead of needing a manual bump every time a dependency raises the
+language version floor.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 EOF
