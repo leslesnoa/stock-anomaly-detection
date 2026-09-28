@@ -366,7 +366,7 @@ EOF
 	"github.com/stock-anomaly-detection/go-api/migrations"
 ```
 
-配置場所: 既存の`"github.com/stock-anomaly-detection/go-api/internal/infrastructure/persistence"`の直前（アルファベット順）。
+配置場所: 既存の`"github.com/stock-anomaly-detection/go-api/internal/usecase"`の直後（`"internal/..."` < `"migrations"` のアルファベット順で最後になる）。import順序はビルド結果に影響しないため、`gofmt`/`goimports`済みであれば厳密な位置は問わない。
 
 - [ ] **Step 2: `RunMigrations`呼び出しを挿入する**
 
