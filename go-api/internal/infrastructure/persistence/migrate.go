@@ -31,11 +31,14 @@ func RunMigrations(databaseURL string, fsys embed.FS) error {
 
 	sourceDriver, err := iofs.New(fsys, ".")
 	if err != nil {
+		driver.Close()
 		return fmt.Errorf("migration source: %w", err)
 	}
 
 	m, err := migrate.NewWithInstance("iofs", sourceDriver, "pgx5", driver)
 	if err != nil {
+		sourceDriver.Close()
+		driver.Close()
 		return fmt.Errorf("init migrate: %w", err)
 	}
 	defer func() {
