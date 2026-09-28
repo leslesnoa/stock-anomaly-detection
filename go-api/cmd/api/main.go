@@ -17,6 +17,7 @@ import (
 	"github.com/stock-anomaly-detection/go-api/internal/interface/gateway"
 	"github.com/stock-anomaly-detection/go-api/internal/interface/handler"
 	"github.com/stock-anomaly-detection/go-api/internal/usecase"
+	"github.com/stock-anomaly-detection/go-api/migrations"
 )
 
 const watchlistRefreshInterval = 5 * time.Minute
@@ -63,6 +64,9 @@ func main() {
 	}
 
 	databaseURL := mustEnv("DATABASE_URL")
+	if err := persistence.RunMigrations(databaseURL, migrations.FS); err != nil {
+		log.Fatalf("failed to run migrations: %v", err)
+	}
 	pool, err := persistence.Connect(ctx, databaseURL)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
