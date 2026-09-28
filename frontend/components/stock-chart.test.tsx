@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { StockChart, sliceToDisplayWindow } from "./stock-chart";
+import {
+  StockChart,
+  sliceToDisplayWindow,
+  PERIOD_TRADING_DAYS,
+} from "./stock-chart";
 import type {
   StockChart as StockChartData,
   StockChartPrice,
@@ -214,5 +218,30 @@ describe("sliceToDisplayWindow", () => {
     expect(sliced.prices[sliced.prices.length - 1]).toEqual(
       prices[prices.length - 1],
     );
+  });
+
+  it("slices down to the given days argument, overriding the default window", () => {
+    const prices = buildPrices(200);
+    const alertBand = buildAlertBand(200);
+    const data: StockChartData = { ...baseData, prices, alert_band: alertBand };
+
+    const sliced = sliceToDisplayWindow(data, 21);
+
+    expect(sliced.prices).toHaveLength(21);
+    expect(sliced.alert_band).toHaveLength(21);
+    expect(sliced.prices[sliced.prices.length - 1]).toEqual(
+      prices[prices.length - 1],
+    );
+  });
+
+  it("returns all entries when days exceeds the available history (e.g. a freshly added stock)", () => {
+    const prices = buildPrices(10);
+    const alertBand = buildAlertBand(10);
+    const data: StockChartData = { ...baseData, prices, alert_band: alertBand };
+
+    const sliced = sliceToDisplayWindow(data, PERIOD_TRADING_DAYS["2Y"]);
+
+    expect(sliced.prices).toHaveLength(10);
+    expect(sliced.alert_band).toHaveLength(10);
   });
 });

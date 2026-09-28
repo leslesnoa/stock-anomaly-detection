@@ -16,19 +16,37 @@ import type {
   StockChartNotification,
 } from "@/lib/go-api-client";
 
-// デフォルト表示期間: 直近約6ヶ月分の取引日数（1ヶ月≒21営業日 × 6）。
-// 1M/3M/6M/1Y/2Yのレンジ切り替えUIは後続タスクで追加予定（このフィックスの対象外）。
-const DISPLAY_TRADING_DAYS = 126;
+export type ChartPeriod = "1M" | "3M" | "6M" | "1Y" | "2Y";
 
-// 表示用に直近DISPLAY_TRADING_DAYS件へ絞り込む。予測の起点（最新の価格・日付）は
+// 各期間ボタンに対応する営業日数。1ヶ月≒21営業日で概算。2Yはバックフィル上限
+// （backfillDays=500営業日、go-api側 usecase.BackfillPriceHistoryUsecase）と一致させ、
+// 取得済みデータの実質フルレンジを表す。
+export const PERIOD_TRADING_DAYS: Record<ChartPeriod, number> = {
+  "1M": 21,
+  "3M": 63,
+  "6M": 126,
+  "1Y": 252,
+  "2Y": 500,
+};
+
+export const PERIOD_OPTIONS: ChartPeriod[] = ["1M", "3M", "6M", "1Y", "2Y"];
+
+export const DEFAULT_PERIOD: ChartPeriod = "6M";
+
+// 表示用に直近days件へ絞り込む。予測の起点（最新の価格・日付）は
 // 絞り込み後も変わらない（sliceは末尾を保持するため）ので、buildRowsの予測アンカリングには
 // 影響しない。notificationsは絞り込まない: markerRows は絞り込み後のrows（data.prices由来）
 // に存在する日付としか一致しないため、絞り込みは自然に反映される。
-export function sliceToDisplayWindow(data: StockChartData): StockChartData {
+// daysが実際の件数を超える場合（新規watchlist登録直後などhistoryが浅い場合）は
+// Array.prototype.sliceの性質上、全件がそのまま返る。
+export function sliceToDisplayWindow(
+  data: StockChartData,
+  days: number = PERIOD_TRADING_DAYS[DEFAULT_PERIOD],
+): StockChartData {
   return {
     ...data,
-    prices: data.prices.slice(-DISPLAY_TRADING_DAYS),
-    alert_band: data.alert_band.slice(-DISPLAY_TRADING_DAYS),
+    prices: data.prices.slice(-days),
+    alert_band: data.alert_band.slice(-days),
   };
 }
 
