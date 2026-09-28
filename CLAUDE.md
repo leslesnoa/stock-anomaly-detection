@@ -43,7 +43,7 @@
 ## GitHub Actions CI
 - postgres:16 サービス
 - `DATABASE_URL: postgres://postgres:postgres@localhost:5432/stock_anomaly_test?sslmode=disable`
-- マイグレーションはgo-api起動時（および`persistence`パッケージの`TestMain`）にgolang-migrateで自動適用される。新しいマイグレーションを追加する場合は `go-api/migrations/` に `NNN_xxx.up.sql`/`NNN_xxx.down.sql` のペアで追加すればよく、CIワークフローへの追記は不要
+- マイグレーションはgo-api起動時（および`persistence`パッケージの`TestMain`）にgolang-migrateで自動適用される。新しいマイグレーションを追加する場合は `go-api/migrations/` に `NNN_xxx.up.sql`/`NNN_xxx.down.sql` のペアで追加すればよく、CIワークフローへの追記は不要。ただし`docker-compose.yml`は`go-api/migrations`を`/docker-entrypoint-initdb.d`にマウントしており、フレッシュなボリューム上では全`*.sql`がasciibetical順に実行されるため`NNN_xxx.down.sql`が自分自身の`NNN_xxx.up.sql`より先に走る（"down" < "up"）。`.down.sql`は必ず`IF EXISTS`等のガードを入れて冪等にすること
 
 ## 環境変数（本番）
 DATABASE_URL, ANOMALY_THRESHOLD（デフォルト2.5）, ANTHROPIC_API_KEY, SLACK_WEBHOOK_URL, PYTHON_ENGINE_URL, CLAUDE_MODEL（デフォルト claude-opus-5）, JWT_SECRET, PORT（デフォルト8080）

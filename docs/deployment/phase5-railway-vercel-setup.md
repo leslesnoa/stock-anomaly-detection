@@ -92,6 +92,15 @@ SELECT * FROM schema_migrations;
 SELECT stock_code, count(*), min(date), max(date) FROM daily_prices GROUP BY stock_code;
 ```
 
+> **`dirty`状態からの回復について:** `schema_migrations`テーブルの`dirty`カラムが`true`の場合、
+> マイグレーションが途中で失敗した状態を意味する。`dirty=true`の間はgo-apiが起動しない
+> （`RunMigrations`が毎回失敗し`log.Fatalf`でプロセスが終了する）ため、再起動や再デプロイだけ
+> では回復しない。回復するには、原因になったマイグレーションのSQLを確認し、DBの実際の状態
+> （どこまで適用されたか）を手動で確認した上で、
+> `UPDATE schema_migrations SET dirty = false WHERE version = <実際に完了しているバージョン>;`
+> （または`golang-migrate`の`migrate force <version>` CLI）でdirtyフラグを解除してから
+> 再デプロイする。
+
 ## 5. go-api / python-engine のデプロイ確認
 
 1. Railwayダッシュボードで両サービスのデプロイが成功していることを確認する
