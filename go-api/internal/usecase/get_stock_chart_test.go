@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/anomaly"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/forecast"
@@ -215,4 +216,40 @@ func TestGetStockChartUsecase_AlertBandConsistentWithDetector(t *testing.T) {
 
 	require.NotNil(t, chart.CurrentZScore)
 	assert.InDelta(t, expectedZ, float64(*chart.CurrentZScore), 1e-9)
+}
+
+// TestGetStockChartUsecase_ForecastCallHasBoundedTimeout は、
+// Forecaster.Forecast に渡す ctx が、リクエストのctxそのものではなく
+// go-apiのhttp.Server.WriteTimeout（30秒）より十分短い独自のデッドラインを
+// 持つことを保証する。python-engineへの疎通が失敗して30秒張り付いた場合に、
+// WriteTimeoutが先に発火してレスポンス書き込み前に接続が強制切断される
+// 本番障害を防ぐためのガード。
+func TestGetStockChartUsecase_ForecastCallHasBoundedTimeout(t *testing.T) {
+	code, _ := stock.NewStockCode("7203")
+	watchlists := new(mockWatchlistRepository)
+	watchlists.On("FindByUserID", mock.Anything, "user-1").Return([]watchlist.Watchlist{{StockCode: code}}, nil)
+
+	quotes := buildQuotes(130)
+	prices := new(MockPriceRepository)
+	prices.On("FindRecent", mock.Anything, code, mock.Anything).Return(quotes, nil)
+
+	forecaster := new(MockForecaster)
+	forecaster.On("Forecast", mock.MatchedBy(func(ctx context.Context) bool {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			return false
+		}
+		remaining := time.Until(deadline)
+		return remaining > 0 && remaining <= 10*time.Second
+	}), code, mock.Anything, mock.Anything).
+		Return(forecast.Forecast{Horizon: 20, Points: []forecast.Point{{Step: 1, Center: 1200}}}, nil)
+
+	notifications := new(MockNotificationRepository)
+	notifications.On("FindByStockCode", mock.Anything, "7203").Return([]notification.Notification{}, nil)
+
+	uc := newChartUsecase(t, watchlists, prices, forecaster, notifications)
+	_, err := uc.Handle(context.Background(), "user-1", "7203")
+
+	require.NoError(t, err)
+	forecaster.AssertExpectations(t)
 }
