@@ -31,21 +31,13 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: go-api/go.mod
           cache: true
           cache-dependency-path: go-api/go.sum
 
       - name: Run unit tests
         working-directory: go-api
         run: go test -race -short ./...
-
-      - name: Run database migration
-        run: |
-          psql $DATABASE_URL -f go-api/migrations/001_initial_schema.sql
-          psql $DATABASE_URL -f go-api/migrations/002_add_watchlist_stock_name.sql
-          psql $DATABASE_URL -f go-api/migrations/003_create_daily_prices.sql
-        env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/stock_anomaly_test?sslmode=disable
 
       - name: Run integration tests
         working-directory: go-api
