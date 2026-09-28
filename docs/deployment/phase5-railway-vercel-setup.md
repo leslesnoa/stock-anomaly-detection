@@ -72,40 +72,25 @@ go-apiの`http.Server.WriteTimeout`（30秒）が先に発火して接続が強�
 
 ## 4. DBマイグレーションの適用
 
-RailwayのPostgresプラグインの`DATABASE_URL`は通常`*.railway.internal`を指しており、
-開発者のローカル端末からは名前解決できない。そのため`railway connect`でRailwayのプロキシ
-経由のローカルpsqlセッションを開き、その中でマイグレーションファイルを読み込む。
+2026-09-28以降、マイグレーションはgo-api起動時に自動適用される（golang-migrate、
+`internal/infrastructure/persistence/migrate.go`の`RunMigrations`）。手動でのpsql実行は不要。
+マイグレーション適用に失敗した場合、go-apiは起動せずプロセスが終了する（`log.Fatalf`）ため、
+誤ったスキーマのままサービスが立ち上がることはない。
 
-Railway CLIでプロジェクトにリンクした状態で実行する（Postgresプラグインのサービス名は
-慣例的に`Postgres`と大文字始まりであることに注意）:
-
-```bash
-railway link
-railway connect Postgres
-```
-
-`railway connect`が開いたpsqlセッションの中で、`go-api/migrations/`ディレクトリの
-マイグレーションファイルを、ファイル名の昇順に実行する。番号がついた順序で実行することで、
-将来マイグレーションファイルが追加されたとき、このドキュメントを更新する手間を省ける:
-
-```
-\i go-api/migrations/001_initial_schema.sql
-\i go-api/migrations/002_add_watchlist_stock_name.sql
-\i go-api/migrations/003_create_daily_prices.sql
-```
+新しいマイグレーションファイルを追加する場合は、`go-api/migrations/`に
+`NNN_xxx.up.sql`/`NNN_xxx.down.sql`のペアで追加すればよい。デプロイ順序に関する
+特別な注意（旧版で必要だった「新イメージのデプロイ前に適用」等）は不要になった。
 
 > **既にRedisプラグインを追加済みの環境について:** go-apiは2026-09-24以降Redisを一切参照しない。
 > Railwayプロジェクトに残っているRedisプラグインと`REDIS_URL`の変数参照は削除してよい。
 
-> **既存環境のアップグレード手順（2026-09-24）:** `003_create_daily_prices.sql` は
-> **新しいgo-apiイメージをデプロイする前に**適用すること。テーブルが無い状態でgo-apiが起動すると、
-> 起動時バックフィルが全銘柄で失敗し、そのプロセスの間は再試行されない。
-> デプロイ後に適用してしまった場合は、go-apiサービスを再起動して起動時バックフィルをやり直す。
-> 適用後は以下で各銘柄におよそ500行（約2年分）入っていることを確認する:
->
-> ```sql
-> SELECT stock_code, count(*), min(date), max(date) FROM daily_prices GROUP BY stock_code;
-> ```
+緊急時に手動でスキーマ状態を確認・介入する場合は、`railway connect Postgres`でPostgresへ
+接続し、以下のクエリでgolang-migrateの適用状態を確認できる:
+
+```sql
+SELECT * FROM schema_migrations;
+SELECT stock_code, count(*), min(date), max(date) FROM daily_prices GROUP BY stock_code;
+```
 
 ## 5. go-api / python-engine のデプロイ確認
 
