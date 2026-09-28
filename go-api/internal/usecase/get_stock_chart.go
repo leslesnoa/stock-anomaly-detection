@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"math"
+	"time"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/anomaly"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/forecast"
@@ -15,6 +16,12 @@ import (
 // forecastMinPrices はPython engineの /forecast が要求する最低価格件数
 // （推定ウィンドウ120営業日＋1）。これ未満の場合はPython engineを呼ばずforecastをnilにする。
 const forecastMinPrices = 121
+
+// forecastTimeout はPython engine呼び出しに独自に課す上限。go-apiのhttp.Server.WriteTimeout
+// （main.goで30秒）より十分短くすることで、python-engineへの疎通が失敗して張り付いた場合でも
+// WriteTimeoutが先に発火して未書き込みのままレスポンスが強制切断される事態を避け、
+// 期限内にforecast抜きの縮退レスポンスを返せるようにする。
+const forecastTimeout = 10 * time.Second
 
 type AlertBandPoint struct {
 	Date  string
@@ -118,7 +125,10 @@ func (u *GetStockChartUsecase) Handle(ctx context.Context, userID, rawStockCode 
 		for i, q := range quotes {
 			floatPrices[i] = float64(q.Price)
 		}
-		if f, err := u.forecaster.Forecast(ctx, code, *chart.CurrentPrice, floatPrices); err == nil {
+		forecastCtx, cancel := context.WithTimeout(ctx, forecastTimeout)
+		f, err := u.forecaster.Forecast(forecastCtx, code, *chart.CurrentPrice, floatPrices)
+		cancel()
+		if err == nil {
 			chart.Forecast = &f
 		} else {
 			log.Printf("WARN forecast failed for %s: %v", code, err)
