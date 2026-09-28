@@ -64,10 +64,11 @@ go-apiからの内部通信が黙って失敗している可能性がある。�
 フォールバック仕様（CLAUDE.md参照）によりClaude分析なしのテクニカル指標のみの通知に
 静かに縮退するため、エラーとして気づきにくい。
 
-想定される対処（本ガイドでは未適用・未検証）: python-engineのuvicorn起動を`::`
-（IPv6ワイルドカード）でバインドするよう変更する。ただしこれはRailwayの現行ネットワーク
-仕様に対する実地検証を行っていない推測であり、実施前に最新のRailwayドキュメントで
-挙動を確認すること。
+**2026-09-28、この懸念が実際に発生し確認・修正済み:** PR-B（`/stocks/{code}/chart`）で
+python-engineへの同期呼び出しが増えたことで顕在化し、`python-engine/Dockerfile`のuvicorn起動を
+`--host ::`（IPv6ワイルドカード）に変更した。あわせて、go-api側の`GetStockChartUsecase`にも
+python-engine呼び出し専用の10秒タイムアウト（`forecastTimeout`）を追加し、疎通失敗時に
+go-apiの`http.Server.WriteTimeout`（30秒）が先に発火して接続が強制切断される事態を防いでいる。
 
 ## 4. DBマイグレーションの適用
 
