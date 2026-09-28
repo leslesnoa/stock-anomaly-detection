@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ComposedChart,
   Area,
@@ -11,6 +12,7 @@ import {
   ResponsiveContainer,
   ReferenceDot,
 } from "recharts";
+import { Button } from "@/components/ui/button";
 import type {
   StockChart as StockChartData,
   StockChartNotification,
@@ -151,9 +153,10 @@ function ChartTooltip({
 }
 
 export function StockChart({ data }: { data: StockChartData }) {
-  // 表示は直近約6ヶ月に絞る。sliceは末尾（最新）を保持するため、予測のアンカー
+  const [period, setPeriod] = useState<ChartPeriod>(DEFAULT_PERIOD);
+  // 表示は選択中の期間に絞る。sliceは末尾（最新）を保持するため、予測のアンカー
   // （data.prices の最終要素の日付・終値）は絞り込み前後で変わらない。
-  const displayData = sliceToDisplayWindow(data);
+  const displayData = sliceToDisplayWindow(data, PERIOD_TRADING_DAYS[period]);
   const rows = buildRows(displayData);
   const markerRows = rows.filter(
     (r) => r.notification !== undefined && r.close !== undefined,
@@ -161,6 +164,20 @@ export function StockChart({ data }: { data: StockChartData }) {
 
   return (
     <div className="space-y-2">
+      <div className="flex gap-1" role="group" aria-label="表示期間">
+        {PERIOD_OPTIONS.map((p) => (
+          <Button
+            key={p}
+            type="button"
+            size="xs"
+            variant={p === period ? "default" : "outline"}
+            aria-pressed={p === period}
+            onClick={() => setPeriod(p)}
+          >
+            {p}
+          </Button>
+        ))}
+      </div>
       {!data.forecast && (
         <p className="text-sm text-muted-foreground" role="status">
           予測を取得できませんでした

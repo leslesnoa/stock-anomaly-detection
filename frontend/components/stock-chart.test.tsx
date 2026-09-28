@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import {
   StockChart,
   sliceToDisplayWindow,
@@ -174,6 +174,46 @@ describe("StockChart", () => {
     expect(container.querySelectorAll(".recharts-reference-dot").length).toBe(
       1,
     );
+  });
+
+  it("renders period toggle buttons with 6M selected by default", () => {
+    render(<StockChart data={baseData} />);
+    const group = screen.getByRole("group", { name: "表示期間" });
+    const buttons = ["1M", "3M", "6M", "1Y", "2Y"].map((label) =>
+      screen.getByRole("button", { name: label }),
+    );
+    buttons.forEach((button) => expect(group).toContainElement(button));
+
+    const sixMonthButton = screen.getByRole("button", { name: "6M" });
+    expect(sixMonthButton).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "1M" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("switches the selected period button when clicked", () => {
+    render(<StockChart data={baseData} />);
+    const oneMonthButton = screen.getByRole("button", { name: "1M" });
+
+    fireEvent.click(oneMonthButton);
+
+    expect(oneMonthButton).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "6M" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("keeps the forecast lines intact after switching periods", async () => {
+    render(<StockChart data={baseData} />);
+    fireEvent.click(screen.getByRole("button", { name: "1M" }));
+
+    // 予測はもともとスライス対象外なので、期間切り替え後も凡例のラベルは残り続ける。
+    expect(await screen.findByText("予測中心線")).toBeInTheDocument();
+    expect(
+      screen.queryByText("予測を取得できませんでした"),
+    ).not.toBeInTheDocument();
   });
 });
 
