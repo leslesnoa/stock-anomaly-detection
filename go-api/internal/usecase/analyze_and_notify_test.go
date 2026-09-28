@@ -48,6 +48,14 @@ func (m *MockNotificationRepository) Save(ctx context.Context, n notification.No
 	return m.Called(ctx, n).Error(0)
 }
 
+func (m *MockNotificationRepository) FindByStockCode(ctx context.Context, stockCode string) ([]notification.Notification, error) {
+	args := m.Called(ctx, stockCode)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]notification.Notification), args.Error(1)
+}
+
 func rsi(v float64) *float64 { return &v }
 
 func TestAnalyzeAndNotifyUsecase_Handle_HappyPath(t *testing.T) {

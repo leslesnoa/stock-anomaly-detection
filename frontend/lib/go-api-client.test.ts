@@ -5,6 +5,7 @@ import {
   fetchWatchlist,
   addWatchlistItem,
   removeWatchlistItem,
+  fetchStockChart,
 } from "./go-api-client";
 
 describe("go-api-client", () => {
@@ -182,6 +183,59 @@ describe("go-api-client", () => {
     );
 
     const result = await removeWatchlistItem("jwt-token", "1");
+
+    expect(result).toEqual({
+      ok: false,
+      error: "watchlist item not found",
+      status: 404,
+    });
+  });
+
+  it("fetchStockChart returns chart data and sends bearer token", async () => {
+    const chartBody = {
+      stock_code: "7203",
+      current_price: 3250.0,
+      prices: [{ date: "2026-09-01", close: 3200.0 }],
+      alert_band: [{ date: "2026-09-01", upper: 3300.0, lower: 3100.0 }],
+      current_z_score: 1.5,
+      forecast: {
+        horizon: 20,
+        points: [
+          {
+            step: 1,
+            center: 3260.0,
+            upper_68: 3300.0,
+            lower_68: 3220.0,
+            upper_95: 3350.0,
+            lower_95: 3180.0,
+          },
+        ],
+      },
+      notifications: [],
+    };
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(chartBody), { status: 200 }),
+    );
+
+    const result = await fetchStockChart("jwt-token", "7203");
+
+    expect(result).toEqual({ ok: true, chart: chartBody });
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost:8080/stocks/7203/chart",
+      expect.objectContaining({
+        headers: { Authorization: "Bearer jwt-token" },
+      }),
+    );
+  });
+
+  it("fetchStockChart returns error on 404", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ error: "watchlist item not found" }), {
+        status: 404,
+      }),
+    );
+
+    const result = await fetchStockChart("jwt-token", "9999");
 
     expect(result).toEqual({
       ok: false,

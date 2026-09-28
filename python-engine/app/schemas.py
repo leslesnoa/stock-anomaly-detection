@@ -36,3 +36,36 @@ class Indicators(BaseModel):
 class AnalyzeResponse(BaseModel):
     stock_code: str
     indicators: Indicators
+
+
+ESTIMATION_WINDOW = 120
+FORECAST_HORIZON = 20
+
+
+class ForecastRequest(BaseModel):
+    stock_code: str
+    current_price: float
+    prices: list[float]
+
+    @field_validator("prices")
+    @classmethod
+    def prices_min_length(cls, v: list[float]) -> list[float]:
+        min_len = ESTIMATION_WINDOW + 1
+        if len(v) < min_len:
+            raise ValueError(f"prices must have at least {min_len} elements")
+        return v
+
+
+class ForecastPoint(BaseModel):
+    step: int
+    center: float
+    upper_68: float
+    lower_68: float
+    upper_95: float
+    lower_95: float
+
+
+class ForecastResponse(BaseModel):
+    stock_code: str
+    horizon: int
+    points: list[ForecastPoint]

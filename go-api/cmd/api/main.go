@@ -89,9 +89,11 @@ func main() {
 	registerUsecase := usecase.NewRegisterUserUsecase(userRepo, hasher)
 	loginUsecase := usecase.NewLoginUserUsecase(userRepo, hasher, tokenService)
 	watchlistUsecase := usecase.NewManageWatchlistUsecase(watchlistRepo, backfillUsecase, priceFetcher)
+	chartUsecase := usecase.NewGetStockChartUsecase(watchlistRepo, priceRepo, detector, pythonEngineClient, notificationRepo, threshold)
 
 	authHandler := handler.NewAuthHandler(registerUsecase, loginUsecase)
 	watchlistHandler := handler.NewWatchlistHandler(watchlistUsecase)
+	stockHandler := handler.NewStockHandler(chartUsecase)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handler.Health)
@@ -101,6 +103,7 @@ func main() {
 	mux.HandleFunc("POST /watchlist", handler.RequireAuth(tokenService, watchlistHandler.Add))
 	mux.HandleFunc("DELETE /watchlist/{id}", handler.RequireAuth(tokenService, watchlistHandler.Remove))
 	mux.HandleFunc("PATCH /watchlist/{id}", handler.RequireAuth(tokenService, watchlistHandler.UpdateThreshold))
+	mux.HandleFunc("GET /stocks/{code}/chart", handler.RequireAuth(tokenService, stockHandler.Chart))
 
 	srv := &http.Server{
 		Addr:              ":" + port,

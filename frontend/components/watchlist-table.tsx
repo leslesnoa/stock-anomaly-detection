@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { Inbox, Loader2, Trash2 } from "lucide-react";
 import type { WatchlistItem } from "@/lib/go-api-client";
 import { removeAction } from "@/app/watchlist/actions";
@@ -58,7 +59,14 @@ function WatchlistRow({ item }: { item: WatchlistItem }) {
 
   return (
     <TableRow>
-      <TableCell>{item.stock_code}</TableCell>
+      <TableCell>
+        <Link
+          href={`/stocks/${item.stock_code}`}
+          className="underline underline-offset-4"
+        >
+          {item.stock_code}
+        </Link>
+      </TableCell>
       <TableCell>{item.stock_name || "-"}</TableCell>
       <TableCell className="text-right">
         <Button
