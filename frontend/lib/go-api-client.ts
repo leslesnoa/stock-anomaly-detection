@@ -121,9 +121,19 @@ export type StockChartForecastPoint = {
   upper_95: number;
   lower_95: number;
 };
+export type StockChartDirectionModel = {
+  adopted: boolean;
+  predicted_direction: "up" | "down" | null;
+  hit_rate: number | null;
+  baseline_hit_rate: number | null;
+  p_value: number | null;
+  independent_sample_count: number | null;
+  trained_at: string | null;
+};
 export type StockChartForecast = {
   horizon: number;
   points: StockChartForecastPoint[];
+  direction_model: StockChartDirectionModel;
 };
 export type StockChartNotification = {
   notified_at: string;
