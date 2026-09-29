@@ -40,7 +40,8 @@
 **Files:**
 - Create: `python-engine/app/services/direction_features.py`
 - Test: `python-engine/tests/test_direction_features.py`
-- Modify: `python-engine/pyproject.toml`（本タスクでは変更不要、既存pandas/pandas_taのみ使用）
+- Modify: `python-engine/pyproject.toml`（`numpy`を明示的な依存として追加。pandasの推移的依存として
+  既にインストールされてはいるが、`direction_features.py`が`numpy`を直接importするため明示化する）
 
 **Interfaces:**
 - Produces:
@@ -139,7 +140,24 @@ def test_generate_direction_labels_last_horizon_rows_are_nan():
 Run: `cd python-engine && uv run pytest tests/test_direction_features.py -v`
 Expected: FAIL（`app.services.direction_features` が存在しない）
 
-- [ ] **Step 3: 最小実装を書く**
+- [ ] **Step 3: `pyproject.toml`に`numpy`を追加する**
+
+```toml
+# python-engine/pyproject.toml の dependencies に numpy を追加
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.9.0",
+    "pandas>=2.2.0",
+    "pandas-ta>=0.3.14b",
+    "httpx>=0.27.0",
+    "numpy>=2.0.0",
+]
+```
+
+Run: `cd python-engine && uv sync`
+
+- [ ] **Step 4: 最小実装を書く**
 
 ```python
 # python-engine/app/services/direction_features.py
@@ -213,15 +231,16 @@ def generate_direction_labels(prices: list[float], horizon: int) -> pd.Series:
     return label
 ```
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [ ] **Step 5: テストが通ることを確認する**
 
 Run: `cd python-engine && uv run pytest tests/test_direction_features.py -v`
 Expected: PASS（全7件）
 
-- [ ] **Step 5: コミット**
+- [ ] **Step 6: コミット**
 
 ```bash
-git add python-engine/app/services/direction_features.py python-engine/tests/test_direction_features.py
+git add python-engine/app/services/direction_features.py python-engine/tests/test_direction_features.py \
+        python-engine/pyproject.toml python-engine/uv.lock
 git commit -m "$(cat <<'EOF'
 feat(python-engine): add direction classifier feature/label extraction
 
