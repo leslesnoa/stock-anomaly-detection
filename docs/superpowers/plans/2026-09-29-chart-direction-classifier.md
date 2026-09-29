@@ -729,13 +729,17 @@ def test_evaluate_direction_model_insufficient_rows_does_not_crash():
 
 
 def test_evaluate_direction_model_with_enough_data_produces_stats():
+    # 900営業日×3銘柄: walk-forwardは4フォールド生成され、各フォールドの非重複サンプリングで
+    # 約8件×3銘柄=24件、4フォールド合計で約96件の独立検定サンプルが確保される
+    # （MIN_INDEPENDENT_SAMPLES=60を上回る）。400営業日では27件程度にしかならず
+    # このガードに引っかかってhit_rate等がNoneのままになるため、意図的に大きくしている。
     stocks = [
-        _trending_series("7203", 400, 0.01),
-        _trending_series("6758", 400, -0.005),
-        _trending_series("9984", 400, 0.003),
+        _trending_series("7203", 900, 0.01),
+        _trending_series("6758", 900, -0.005),
+        _trending_series("9984", 900, 0.003),
     ]
     result = evaluate_direction_model(stocks)
-    assert result.independent_sample_count > 0
+    assert result.independent_sample_count >= 60
     assert result.hit_rate is not None
     assert 0.0 <= result.hit_rate <= 1.0
     assert result.baseline_hit_rate is not None
@@ -1035,11 +1039,18 @@ def test_negative_control_false_positive_rate_matches_significance_level():
     近い頻度でしか真にならないことを確認する。この検定が壊れていると
     （p値が過小評価されるバグがあると）ここで異常に高い採用率として現れる。
     """
+    # n_days=900・n_stocks=4は、evaluate_direction_modelのMIN_INDEPENDENT_SAMPLES（60）
+    # ガードを確実に上回らせるための最小限のサイズ。この値が小さすぎる
+    # （例: 300営業日）と、walk-forwardのfold分割・非重複サンプリング後の独立サンプル数が
+    # 60を割り込み、対比較検定に一度も到達しないまま毎回meets_criteria=Falseで
+    # 早期リターンしてしまう。その場合このテストは「検定ロジックを一度も実行せずに
+    # 誤って合格する」安全網として機能しない偽陰性になるため、必ずガードを超えるサイズにする。
     n_trials = 50
     n_stocks = 4
-    n_days = 300
+    n_days = 900
 
     false_positives = 0
+    independent_sample_counts = []
     for seed in range(n_trials):
         rng = np.random.default_rng(seed)
         dates = _dates(n_days)
@@ -1048,8 +1059,13 @@ def test_negative_control_false_positive_rate_matches_significance_level():
             for i in range(n_stocks)
         ]
         result = evaluate_direction_model(stocks)
+        independent_sample_counts.append(result.independent_sample_count)
         if result.meets_criteria:
             false_positives += 1
+
+    # 検定ロジックに実際に到達したことを確認する（到達していなければ上の
+    # false_positive_rateの合格は無意味なので、このテスト自体の前提を保証する）。
+    assert min(independent_sample_counts) >= 60
 
     false_positive_rate = false_positives / n_trials
     # 有意水準0.05に対し、二項分布のばらつきを考慮した緩い上限（0.20）で判定する。
@@ -1133,15 +1149,13 @@ def test_calculate_forecast_center_unchanged_when_not_adopted():
     assert result.points[0].center > prices[-1]
 
 
-def test_calculate_forecast_flips_center_sign_when_adopted_and_disagrees():
+def test_calculate_forecast_flips_center_sign_when_adopted_and_disagrees(monkeypatch):
     prices = [100.0 * (1.01**i) for i in range(ESTIMATION_WINDOW + 1)]  # 上昇トレンド（mu > 0）
 
-    class _FakePipeline:
-        pass
-
-    # direction_model_stateを「採用済み・down予測」に強制する
-    direction_model_state._pipeline = (_FakePipeline(), _FakePipeline())
-    direction_model_state.predict_direction = lambda features: "down"
+    # direction_model_stateを「採用済み・down予測」に強制する。predict_directionの上書きは
+    # monkeypatchで行う（reset()はDirectionModelStateが持つ属性しか戻さないため、
+    # インスタンスに直接代入すると次のテストに漏れて汚染する）。
+    monkeypatch.setattr(direction_model_state, "predict_direction", lambda features: "down")
     direction_model_state._status.adopted = True
 
     result = calculate_forecast("7203", prices[-1], prices)
