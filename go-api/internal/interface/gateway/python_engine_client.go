@@ -15,14 +15,20 @@ import (
 )
 
 type PythonEngineClient struct {
-	baseURL    string
-	httpClient *http.Client
+	baseURL         string
+	httpClient      *http.Client
+	trainHTTPClient *http.Client
 }
 
 func NewPythonEngineClient(baseURL string) *PythonEngineClient {
 	return &PythonEngineClient{
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
+		// directionModelTrainTimeout（train_direction_model.go、60秒）より長く
+		// 取っておき、実際の打ち切りはコンテキストのdeadline側に委ねる。
+		// http.Client.Timeout はコンテキストのdeadlineとは独立に効くため、
+		// 共有クライアントの30秒のままだと60秒の設定が事実上無視されてしまう。
+		trainHTTPClient: &http.Client{Timeout: 90 * time.Second},
 	}
 }
 
@@ -228,7 +234,7 @@ func (c *PythonEngineClient) Train(ctx context.Context, series []directionmodel.
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.trainHTTPClient.Do(req)
 	if err != nil {
 		return directionmodel.TrainingResult{}, fmt.Errorf("call python engine: %w", err)
 	}

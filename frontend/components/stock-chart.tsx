@@ -241,7 +241,7 @@ export function StockChart({ data }: { data: StockChartData }) {
           ))}
         </ComposedChart>
       </ResponsiveContainer>
-      {directionModel?.adopted && (
+      {directionModel?.adopted && directionModel.hit_rate != null && (
         <p className="text-xs text-muted-foreground" role="status">
           AIモデルによる方向予測（過去データでの的中率
           {Math.round((directionModel.hit_rate ?? 0) * 100)}

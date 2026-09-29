@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import numpy as np
+import pandas as pd
 from scipy import stats
 
 
@@ -49,6 +50,30 @@ def non_overlapping_sample(sorted_dates: list[str], step: int) -> list[str]:
     隣接ラベルが同じ将来価格を参照して自己相関することによる検定のp値過小評価を防ぐ。
     """
     return sorted_dates[::step]
+
+
+def aggregate_daily_outcomes(
+    dates: np.ndarray, model_correct: np.ndarray, baseline_correct: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    同一日付でプールした複数銘柄は市場要因で相関するため、そのまま独立試行として
+    数えると有意性検定が過大評価される（設計仕様書 2026-09-29-chart-direction-classifier-design.md
+    113-115行参照）。日付ごとにモデル的中数とベースライン的中数を比較し、多い方を
+    「その日の勝者」とする一対比較に還元する（同数はどちらの勝者でもない＝McNemarの
+    一致ペアと同様に除外）。戻り値は日付ごとの「モデルが勝った日」「ベースラインが
+    勝った日」を示す等長のbool配列で、paired_significance_test にそのまま渡せる
+    （model_correct/baseline_correctと同じ意味を持つが、行はstock-dayではなく日付）。
+    """
+    df = pd.DataFrame(
+        {"date": dates, "model_correct": model_correct, "baseline_correct": baseline_correct}
+    )
+    per_date = df.groupby("date").agg(
+        model_hits=("model_correct", "sum"),
+        baseline_hits=("baseline_correct", "sum"),
+    )
+    model_wins = (per_date["model_hits"] > per_date["baseline_hits"]).to_numpy()
+    baseline_wins = (per_date["baseline_hits"] > per_date["model_hits"]).to_numpy()
+    return model_wins, baseline_wins
 
 
 def paired_significance_test(model_correct: np.ndarray, baseline_correct: np.ndarray) -> float:

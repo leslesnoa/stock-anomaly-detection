@@ -414,6 +414,25 @@ describe("StockChart direction model badge", () => {
     expect(screen.getByText(/将来の的中を保証しない/)).toBeInTheDocument();
   });
 
+  it("adopted=trueでもhit_rateがnullならバッジを表示しない", () => {
+    // go-api側の修正でこの状態には到達しなくなったはずだが、UIが「的中率0%、
+    // 統計的に有意」という内部矛盾した表示をしないことを多層防御として保証する。
+    const data = baseChartData();
+    data.forecast!.direction_model = {
+      adopted: true,
+      predicted_direction: "up",
+      hit_rate: null,
+      baseline_hit_rate: null,
+      p_value: null,
+      independent_sample_count: null,
+      trained_at: null,
+    };
+    render(<StockChart data={data} />);
+    expect(
+      screen.queryByText(/AIモデルによる方向予測/),
+    ).not.toBeInTheDocument();
+  });
+
   it("forecastがnullでもクラッシュしない", () => {
     render(<StockChart data={baseChartData({ forecast: null })} />);
     expect(screen.getByText("予測を取得できませんでした")).toBeInTheDocument();
