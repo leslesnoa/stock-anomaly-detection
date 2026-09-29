@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 from app.schemas import AnalyzeRequest, AnalyzeResponse, Indicators, MACDValue, BollingerValue
 from app.schemas import (
+    DirectionModelInfo,
     ForecastRequest,
     ForecastResponse,
     ForecastPoint,
@@ -99,6 +100,15 @@ def test_forecast_response_shape():
                 lower_95=3180.0,
             )
         ],
+        direction_model=DirectionModelInfo(
+            adopted=False,
+            predicted_direction=None,
+            hit_rate=None,
+            baseline_hit_rate=None,
+            p_value=None,
+            independent_sample_count=None,
+            trained_at=None,
+        ),
     )
     assert resp.horizon == 20
     assert resp.points[0].step == 1
