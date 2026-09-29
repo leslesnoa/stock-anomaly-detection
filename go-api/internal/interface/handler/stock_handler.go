@@ -43,9 +43,20 @@ type forecastPointResponse struct {
 	Lower95 float64 `json:"lower_95"`
 }
 
+type directionModelResponse struct {
+	Adopted                bool     `json:"adopted"`
+	PredictedDirection     *string  `json:"predicted_direction"`
+	HitRate                *float64 `json:"hit_rate"`
+	BaselineHitRate        *float64 `json:"baseline_hit_rate"`
+	PValue                 *float64 `json:"p_value"`
+	IndependentSampleCount *int     `json:"independent_sample_count"`
+	TrainedAt              *string  `json:"trained_at"`
+}
+
 type forecastResponse struct {
-	Horizon int                     `json:"horizon"`
-	Points  []forecastPointResponse `json:"points"`
+	Horizon        int                     `json:"horizon"`
+	Points         []forecastPointResponse `json:"points"`
+	DirectionModel directionModelResponse  `json:"direction_model"`
 }
 
 type notificationResponse struct {
@@ -93,7 +104,19 @@ func toStockChartResponse(c usecase.StockChart) stockChartResponse {
 				Upper95: p.Upper95, Lower95: p.Lower95,
 			}
 		}
-		fc = &forecastResponse{Horizon: c.Forecast.Horizon, Points: points}
+		fc = &forecastResponse{
+			Horizon: c.Forecast.Horizon,
+			Points:  points,
+			DirectionModel: directionModelResponse{
+				Adopted:                c.Forecast.DirectionModel.Adopted,
+				PredictedDirection:     c.Forecast.DirectionModel.PredictedDirection,
+				HitRate:                c.Forecast.DirectionModel.HitRate,
+				BaselineHitRate:        c.Forecast.DirectionModel.BaselineHitRate,
+				PValue:                 c.Forecast.DirectionModel.PValue,
+				IndependentSampleCount: c.Forecast.DirectionModel.IndependentSampleCount,
+				TrainedAt:              c.Forecast.DirectionModel.TrainedAt,
+			},
+		}
 	}
 	return stockChartResponse{
 		StockCode:     c.StockCode,

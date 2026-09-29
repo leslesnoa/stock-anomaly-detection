@@ -26,6 +26,10 @@ const watchlistRefreshInterval = 5 * time.Minute
 // Yahoo Finance へ一斉にリクエストを投げないための間隔。
 const startupBackfillInterval = 2 * time.Second
 
+// directionModelRetrainDefaultInterval はAI方向分類器の再学習をどれくらいの
+// 間隔で走らせるかのデフォルト値。DIRECTION_MODEL_RETRAIN_INTERVAL で上書き可能。
+const directionModelRetrainDefaultInterval = 24 * time.Hour
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -63,6 +67,15 @@ func main() {
 		}
 	}
 
+	directionModelRetrainInterval := directionModelRetrainDefaultInterval
+	if v := os.Getenv("DIRECTION_MODEL_RETRAIN_INTERVAL"); v != "" {
+		var err error
+		directionModelRetrainInterval, err = time.ParseDuration(v)
+		if err != nil {
+			log.Fatalf("invalid DIRECTION_MODEL_RETRAIN_INTERVAL: %v", err)
+		}
+	}
+
 	databaseURL := mustEnv("DATABASE_URL")
 	if err := persistence.RunMigrations(databaseURL, migrations.FS); err != nil {
 		log.Fatalf("failed to run migrations: %v", err)
@@ -94,6 +107,7 @@ func main() {
 	loginUsecase := usecase.NewLoginUserUsecase(userRepo, hasher, tokenService)
 	watchlistUsecase := usecase.NewManageWatchlistUsecase(watchlistRepo, backfillUsecase, priceFetcher)
 	chartUsecase := usecase.NewGetStockChartUsecase(watchlistRepo, priceRepo, detector, pythonEngineClient, notificationRepo, threshold)
+	directionModelUsecase := usecase.NewTrainDirectionModelUsecase(watchlistRepo, priceRepo, pythonEngineClient)
 
 	authHandler := handler.NewAuthHandler(registerUsecase, loginUsecase)
 	watchlistHandler := handler.NewWatchlistHandler(watchlistUsecase)
@@ -138,6 +152,12 @@ func main() {
 		log.Printf("startup backfill: checking %d stocks", len(codes))
 		backfillUsecase.RunAll(ctx, codes, startupBackfillInterval)
 		log.Println("startup backfill finished")
+	}()
+
+	// AI方向分類器の再学習を directionModelRetrainInterval 間隔で回す。
+	// HTTPサーバーと監視ループを待たせないよう goroutine で回す。
+	go func() {
+		directionModelUsecase.RunPeriodically(ctx, directionModelRetrainInterval)
 	}()
 
 	log.Printf("monitoring watchlist stocks (threshold=%.1fσ, poll=%02d:%02d JST, refresh=%s)",
