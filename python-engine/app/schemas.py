@@ -65,7 +65,18 @@ class ForecastPoint(BaseModel):
     lower_95: float
 
 
+class DirectionModelInfo(BaseModel):
+    adopted: bool
+    predicted_direction: str | None
+    hit_rate: float | None
+    baseline_hit_rate: float | None
+    p_value: float | None
+    independent_sample_count: int | None
+    trained_at: str | None
+
+
 class ForecastResponse(BaseModel):
     stock_code: str
     horizon: int
     points: list[ForecastPoint]
+    direction_model: DirectionModelInfo

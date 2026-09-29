@@ -39,3 +39,15 @@ def test_forecast_too_few_prices_returns_422(client):
 def test_health_still_works(client):
     response = client.get("/health")
     assert response.status_code == 200
+
+
+def test_forecast_response_always_includes_direction_model(client):
+    prices = [100.0 * (1.01**i) for i in range(ESTIMATION_WINDOW + 1)]
+    response = client.post(
+        "/forecast",
+        json={"stock_code": "7203", "current_price": prices[-1], "prices": prices},
+    )
+    body = response.json()
+    assert "direction_model" in body
+    assert body["direction_model"]["adopted"] is False
+    assert body["direction_model"]["predicted_direction"] is None
