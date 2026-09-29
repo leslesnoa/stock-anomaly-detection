@@ -9,10 +9,13 @@ import (
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 )
 
-// backfillDays はバックフィルで取得する営業日数。約2年分。
-// 監視に必要なのは historySize（30件）だけだが、チャート表示と
-// ボラティリティ推定に十分な長さの履歴を最初の1回で揃えておく。
-const backfillDays = 500
+// backfillDays はバックフィルで取得する営業日数。約5年分。
+// 監視に必要なのは historySize（30件）だけだが、チャート表示・ボラティリティ推定に
+// 加えて、AI方向分類器（python-engine、direction_model.py）の学習に必要な
+// 独立サンプル数（MIN_INDEPENDENT_SAMPLES=30、日付単位で数える）を確保するには
+// 実測で約1200営業日分の履歴が要る（900日で32件、1200日で44件）。
+// 2026-09-29以前は500日（約2年、AI方向分類器の学習には不足していた）だった。
+const backfillDays = 1200
 
 // BackfillPriceHistoryUsecase は新規watchlist追加時に、過去の値動きを
 // daily_prices へ一括投入する。異常検知が有効になるまでのウォームアップ期間

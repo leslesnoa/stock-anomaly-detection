@@ -20,9 +20,11 @@ import type {
 
 export type ChartPeriod = "1M" | "3M" | "6M" | "1Y" | "2Y";
 
-// 各期間ボタンに対応する営業日数。1ヶ月≒21営業日で概算。2Yはバックフィル上限
-// （backfillDays=500営業日、go-api側 usecase.BackfillPriceHistoryUsecase）と一致させ、
-// 取得済みデータの実質フルレンジを表す。
+// 各期間ボタンに対応する営業日数。1ヶ月≒21営業日で概算。
+// go-api側のbackfillDays（usecase.BackfillPriceHistoryUsecase）は現在1200営業日
+// （約5年、AI方向分類器の学習に必要な独立サンプル数確保のため）まで取得しているが、
+// チャート表示の期間ボタンは実用上の見やすさを優先して2Yまでに留めている
+// （バックフィル済みデータの一部のみを表示する形になる）。
 export const PERIOD_TRADING_DAYS: Record<ChartPeriod, number> = {
   "1M": 21,
   "3M": 63,
