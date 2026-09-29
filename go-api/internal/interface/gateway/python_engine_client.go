@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/analysis"
+	"github.com/stock-anomaly-detection/go-api/internal/domain/directionmodel"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/forecast"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 )
@@ -112,10 +113,21 @@ type forecastPointDTO struct {
 	Lower95 float64 `json:"lower_95"`
 }
 
+type directionModelDTO struct {
+	Adopted                bool     `json:"adopted"`
+	PredictedDirection     *string  `json:"predicted_direction"`
+	HitRate                *float64 `json:"hit_rate"`
+	BaselineHitRate        *float64 `json:"baseline_hit_rate"`
+	PValue                 *float64 `json:"p_value"`
+	IndependentSampleCount *int     `json:"independent_sample_count"`
+	TrainedAt              *string  `json:"trained_at"`
+}
+
 type forecastResponseDTO struct {
-	StockCode string             `json:"stock_code"`
-	Horizon   int                `json:"horizon"`
-	Points    []forecastPointDTO `json:"points"`
+	StockCode      string             `json:"stock_code"`
+	Horizon        int                `json:"horizon"`
+	Points         []forecastPointDTO `json:"points"`
+	DirectionModel directionModelDTO  `json:"direction_model"`
 }
 
 func (c *PythonEngineClient) Forecast(ctx context.Context, code stock.StockCode, currentPrice float64, prices []float64) (forecast.Forecast, error) {
@@ -156,5 +168,85 @@ func (c *PythonEngineClient) Forecast(ctx context.Context, code stock.StockCode,
 			Upper95: p.Upper95, Lower95: p.Lower95,
 		}
 	}
-	return forecast.Forecast{Horizon: result.Horizon, Points: points}, nil
+	return forecast.Forecast{
+		Horizon: result.Horizon,
+		Points:  points,
+		DirectionModel: forecast.DirectionModel{
+			Adopted:                result.DirectionModel.Adopted,
+			PredictedDirection:     result.DirectionModel.PredictedDirection,
+			HitRate:                result.DirectionModel.HitRate,
+			BaselineHitRate:        result.DirectionModel.BaselineHitRate,
+			PValue:                 result.DirectionModel.PValue,
+			IndependentSampleCount: result.DirectionModel.IndependentSampleCount,
+			TrainedAt:              result.DirectionModel.TrainedAt,
+		},
+	}, nil
+}
+
+var _ directionmodel.Trainer = (*PythonEngineClient)(nil)
+
+type modelTrainPricePointDTO struct {
+	Date  string  `json:"date"`
+	Close float64 `json:"close"`
+}
+
+type modelTrainStockDTO struct {
+	StockCode string                    `json:"stock_code"`
+	Prices    []modelTrainPricePointDTO `json:"prices"`
+}
+
+type modelTrainRequest struct {
+	Stocks []modelTrainStockDTO `json:"stocks"`
+}
+
+type modelTrainResponseDTO struct {
+	Adopted                bool     `json:"adopted"`
+	HitRate                *float64 `json:"hit_rate"`
+	BaselineHitRate        *float64 `json:"baseline_hit_rate"`
+	PValue                 *float64 `json:"p_value"`
+	IndependentSampleCount *int     `json:"independent_sample_count"`
+}
+
+func (c *PythonEngineClient) Train(ctx context.Context, series []directionmodel.PriceSeries) (directionmodel.TrainingResult, error) {
+	stocks := make([]modelTrainStockDTO, len(series))
+	for i, s := range series {
+		prices := make([]modelTrainPricePointDTO, len(s.Quotes))
+		for j, q := range s.Quotes {
+			prices[j] = modelTrainPricePointDTO{Date: q.Date, Close: float64(q.Price)}
+		}
+		stocks[i] = modelTrainStockDTO{StockCode: s.StockCode.String(), Prices: prices}
+	}
+
+	reqBody, err := json.Marshal(modelTrainRequest{Stocks: stocks})
+	if err != nil {
+		return directionmodel.TrainingResult{}, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/model/train", bytes.NewReader(reqBody))
+	if err != nil {
+		return directionmodel.TrainingResult{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return directionmodel.TrainingResult{}, fmt.Errorf("call python engine: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return directionmodel.TrainingResult{}, fmt.Errorf("python engine returned status %d", resp.StatusCode)
+	}
+
+	var result modelTrainResponseDTO
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return directionmodel.TrainingResult{}, fmt.Errorf("decode response: %w", err)
+	}
+
+	return directionmodel.TrainingResult{
+		Adopted:                result.Adopted,
+		HitRate:                result.HitRate,
+		BaselineHitRate:        result.BaselineHitRate,
+		PValue:                 result.PValue,
+		IndependentSampleCount: result.IndependentSampleCount,
+	}, nil
 }
