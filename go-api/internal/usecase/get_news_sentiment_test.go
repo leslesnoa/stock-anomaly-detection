@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -177,6 +178,109 @@ func TestGetNewsSentiment_ArticleScoringFailureStillScoresStock(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, usecase.NewsSentimentReady, got.Status)
 	d.repo.AssertNotCalled(t, "SaveJudgements", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestGetNewsSentiment_ManyUnscoredArticlesAreScoredInBatches(t *testing.T) {
+	d := newSentimentDeps(t)
+	code, _ := stock.NewStockCode("7203")
+	articles := make([]sentiment.Article, 25)
+	for i := range articles {
+		articles[i] = unscoredArticle(fmt.Sprintf("id%d", i), fmt.Sprintf("t%d", i))
+	}
+	firstChunkJudgements := make([]sentiment.ArticleJudgement, 20)
+	for i := range firstChunkJudgements {
+		firstChunkJudgements[i] = sentiment.ArticleJudgement{Sentiment: sentiment.Bullish, Confidence: 50}
+	}
+	secondChunkJudgements := make([]sentiment.ArticleJudgement, 5)
+	for i := range secondChunkJudgements {
+		secondChunkJudgements[i] = sentiment.ArticleJudgement{Sentiment: sentiment.Bearish, Confidence: 60}
+	}
+	firstChunkIDs := make([]string, 20)
+	for i, a := range articles[:20] {
+		firstChunkIDs[i] = a.ID
+	}
+	secondChunkIDs := make([]string, 5)
+	for i, a := range articles[20:] {
+		secondChunkIDs[i] = a.ID
+	}
+	scores := sentiment.StockScores{Bullish: 40, Bearish: 30, Impact: 20, Confidence: 10, ShortTermUp: 50}
+
+	d.repo.On("FindLatestSnapshot", mock.Anything, "7203").Return(nil, nil)
+	d.disclosures.On("FetchDisclosures", mock.Anything, code, mock.Anything).Return([]news.Disclosure{}, nil)
+	d.repo.On("UpsertArticles", mock.Anything, mock.Anything).Return(nil)
+	d.repo.On("FindArticlesSince", mock.Anything, "7203", mock.Anything).Return(articles, nil)
+	d.scorer.On("ScoreArticles", mock.Anything, mock.MatchedBy(func(as []sentiment.Article) bool {
+		return len(as) == 20
+	})).Return(firstChunkJudgements, nil).Once()
+	d.scorer.On("ScoreArticles", mock.Anything, mock.MatchedBy(func(as []sentiment.Article) bool {
+		return len(as) == 5
+	})).Return(secondChunkJudgements, nil).Once()
+	d.repo.On("SaveJudgements", mock.Anything, firstChunkIDs, firstChunkJudgements, "claude", sentimentNow).Return(nil).Once()
+	d.repo.On("SaveJudgements", mock.Anything, secondChunkIDs, secondChunkJudgements, "claude", sentimentNow).Return(nil).Once()
+	d.prices.On("FindRecent", mock.Anything, code, 30).Return(buildQuotes(30), nil)
+	d.scorer.On("ScoreStock", mock.Anything, mock.Anything, mock.Anything).Return(scores, nil)
+	d.repo.On("InsertSnapshot", mock.Anything, mock.Anything).Return("snap-new", nil)
+	uc := d.usecase(2 * time.Second)
+
+	got, err := uc.Handle(context.Background(), "user-1", "7203")
+	uc.Wait()
+	require.NoError(t, err)
+	assert.Equal(t, usecase.NewsSentimentReady, got.Status)
+	d.scorer.AssertNumberOfCalls(t, "ScoreArticles", 2)
+	d.repo.AssertNumberOfCalls(t, "SaveJudgements", 2)
+
+	// 呼び出し順（20件のチャンクが先、5件のチャンクが後）を確認する。
+	var scoreArticleCalls []mock.Call
+	for _, c := range d.scorer.Calls {
+		if c.Method == "ScoreArticles" {
+			scoreArticleCalls = append(scoreArticleCalls, c)
+		}
+	}
+	require.Len(t, scoreArticleCalls, 2)
+	assert.Len(t, scoreArticleCalls[0].Arguments.Get(1).([]sentiment.Article), 20)
+	assert.Len(t, scoreArticleCalls[1].Arguments.Get(1).([]sentiment.Article), 5)
+}
+
+func TestGetNewsSentiment_FirstChunkScoringFailureStillScoresSecondChunkAndStock(t *testing.T) {
+	d := newSentimentDeps(t)
+	code, _ := stock.NewStockCode("7203")
+	articles := make([]sentiment.Article, 25)
+	for i := range articles {
+		articles[i] = unscoredArticle(fmt.Sprintf("id%d", i), fmt.Sprintf("t%d", i))
+	}
+	secondChunkJudgements := make([]sentiment.ArticleJudgement, 5)
+	for i := range secondChunkJudgements {
+		secondChunkJudgements[i] = sentiment.ArticleJudgement{Sentiment: sentiment.Neutral, Confidence: 55}
+	}
+	secondChunkIDs := make([]string, 5)
+	for i, a := range articles[20:] {
+		secondChunkIDs[i] = a.ID
+	}
+	scores := sentiment.StockScores{Bullish: 10, Bearish: 10, Impact: 10, Confidence: 10, ShortTermUp: 50}
+
+	d.repo.On("FindLatestSnapshot", mock.Anything, "7203").Return(nil, nil)
+	d.disclosures.On("FetchDisclosures", mock.Anything, code, mock.Anything).Return([]news.Disclosure{}, nil)
+	d.repo.On("UpsertArticles", mock.Anything, mock.Anything).Return(nil)
+	d.repo.On("FindArticlesSince", mock.Anything, "7203", mock.Anything).Return(articles, nil)
+	d.scorer.On("ScoreArticles", mock.Anything, mock.MatchedBy(func(as []sentiment.Article) bool {
+		return len(as) == 20
+	})).Return(nil, errors.New("claude down")).Once()
+	d.scorer.On("ScoreArticles", mock.Anything, mock.MatchedBy(func(as []sentiment.Article) bool {
+		return len(as) == 5
+	})).Return(secondChunkJudgements, nil).Once()
+	d.repo.On("SaveJudgements", mock.Anything, secondChunkIDs, secondChunkJudgements, "claude", sentimentNow).Return(nil).Once()
+	d.prices.On("FindRecent", mock.Anything, code, 30).Return(buildQuotes(30), nil)
+	d.scorer.On("ScoreStock", mock.Anything, mock.Anything, mock.Anything).Return(scores, nil)
+	d.repo.On("InsertSnapshot", mock.Anything, mock.Anything).Return("snap-new", nil)
+	uc := d.usecase(2 * time.Second)
+
+	got, err := uc.Handle(context.Background(), "user-1", "7203")
+	uc.Wait()
+	require.NoError(t, err)
+	assert.Equal(t, usecase.NewsSentimentReady, got.Status)
+	d.scorer.AssertNumberOfCalls(t, "ScoreArticles", 2)
+	d.repo.AssertNumberOfCalls(t, "SaveJudgements", 1)
+	d.scorer.AssertCalled(t, "ScoreStock", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestGetNewsSentiment_ShortPriceHistoryPassesNilIndicators(t *testing.T) {

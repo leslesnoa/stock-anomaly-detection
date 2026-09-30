@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/stock-anomaly-detection/go-api/internal/domain/news"
@@ -82,8 +83,8 @@ func (c *YanoshinTDnetClient) FetchRecent(code stock.StockCode) ([]news.Item, er
 }
 
 func (c *YanoshinTDnetClient) FetchDisclosures(ctx context.Context, code stock.StockCode, since time.Time) ([]news.Disclosure, error) {
-	url := fmt.Sprintf("%s/tdnet/list/%s.json?limit=%d", c.baseURL, code, tdnetDisclosureLimit)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	endpoint := fmt.Sprintf("%s/tdnet/list/%s.json?limit=%d", c.baseURL, code, tdnetDisclosureLimit)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -129,9 +130,24 @@ func (c *YanoshinTDnetClient) FetchDisclosures(ctx context.Context, code stock.S
 		disclosures = append(disclosures, news.Disclosure{
 			TdnetID:     t.ID,
 			Title:       t.Title,
-			URL:         t.DocumentURL,
+			URL:         sanitizeDocumentURL(t.DocumentURL, t.ID, code),
 			PublishedAt: publishedAt,
 		})
 	}
 	return disclosures, nil
+}
+
+// sanitizeDocumentURL は第三者サービス(yanoshin)由来の document_url をそのまま信用しない。
+// url.Parse が成功しスキームが https の場合のみ残し、それ以外（javascript: スキームや http など）は
+// 空文字にしてWARNを残す。記事自体は破棄しない（フロントエンドはURLが空ならタイトルのみ表示する）。
+func sanitizeDocumentURL(raw, tdnetID string, code stock.StockCode) string {
+	if raw == "" {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme != "https" {
+		log.Printf("WARN discard non-https document_url for tdnet item %s (%s): %q", tdnetID, code, raw)
+		return ""
+	}
+	return raw
 }

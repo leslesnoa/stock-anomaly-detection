@@ -213,6 +213,39 @@ func TestYanoshinTDnetClient_FetchDisclosures_EmptyReturnsEmptySlice(t *testing.
 	assert.Empty(t, got)
 }
 
+func TestYanoshinTDnetClient_FetchDisclosures_RejectsNonHttpsDocumentURL(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /tdnet/list/7203.json", func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"items": []map[string]any{
+				{"Tdnet": map[string]string{
+					"id": "1", "title": "JSスキームの開示",
+					"pubdate":      "2026-09-03 15:30:00",
+					"document_url": "javascript:alert(1)",
+				}},
+				{"Tdnet": map[string]string{
+					"id": "2", "title": "httpの開示",
+					"pubdate":      "2026-09-03 15:30:00",
+					"document_url": "http://example.com/a.pdf",
+				}},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewYanoshinTDnetClientWithBaseURL(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+	since := time.Date(2026, 7, 2, 0, 0, 0, 0, time.UTC)
+
+	got, err := client.FetchDisclosures(context.Background(), code, since)
+	require.NoError(t, err)
+	require.Len(t, got, 2, "URLが不正でも記事自体は残す")
+	assert.Empty(t, got[0].URL)
+	assert.Empty(t, got[1].URL)
+}
+
 func TestYanoshinTDnetClient_FetchDisclosures_NonOKStatus(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /tdnet/list/7203.json", func(w http.ResponseWriter, r *http.Request) {

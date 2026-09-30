@@ -18,6 +18,11 @@ import (
 
 const newsSentimentLookbackDays = 90
 
+// articleScoringBatchSize は1回の ScoreArticles 呼び出しに含める未判定記事の上限。
+// 開示が多い銘柄でも1リクエストのトークン数・レイテンシを抑え、チャンクごとに
+// 成功/失敗を分離できるようにする（失敗したチャンクだけ次回再判定すればよい）。
+const articleScoringBatchSize = 20
+
 type NewsSentimentStatus string
 
 const (
@@ -36,7 +41,9 @@ type NewsSentimentConfig struct {
 	CacheTTL time.Duration
 	// WaitTimeout はリクエストが更新処理を待つ上限。http.Server.WriteTimeout（30秒）より短くする。
 	WaitTimeout time.Duration
-	// RefreshTimeout は更新処理全体の上限。Claude呼び出し2回（各最大15秒×リトライ1回）を収める。
+	// RefreshTimeout は更新処理全体の上限。TDnet取得、記事判定（最大5チャンク、
+	// チャンクごとにClaude呼び出し最悪45秒×リトライ1回）、銘柄スコア取得（同じく
+	// 最悪45秒×リトライ1回）を合計で収める。リクエスト自体はそれでも WaitTimeout（20秒）で待つのを諦める。
 	RefreshTimeout time.Duration
 	Now            func() time.Time
 }
@@ -45,7 +52,7 @@ func DefaultNewsSentimentConfig() NewsSentimentConfig {
 	return NewsSentimentConfig{
 		CacheTTL:       6 * time.Hour,
 		WaitTimeout:    20 * time.Second,
-		RefreshTimeout: 60 * time.Second,
+		RefreshTimeout: 180 * time.Second,
 		Now:            time.Now,
 	}
 }
@@ -222,8 +229,11 @@ func (u *GetNewsSentimentUsecase) refresh(ctx context.Context, code stock.StockC
 	return &snap, nil
 }
 
-// scoreUnscoredArticles は未判定の記事だけを判定し、articles をその場で更新する。
-// 失敗しても銘柄スコアの計算は続ける（未判定の記事は次回の更新で再判定される）。
+// scoreUnscoredArticles は未判定の記事だけを、既存の並び順（新しい順）を保ったまま
+// articleScoringBatchSize 件ずつのチャンクに分けて判定し、articles をその場で更新する。
+// チャンクは独立に処理する: あるチャンクの ScoreArticles や SaveJudgements が失敗しても
+// WARN を残して次のチャンクへ進み、銘柄スコアの計算は続ける（保存できなかったチャンクの
+// 記事は未判定のままなので、次回の更新で再判定される）。
 func (u *GetNewsSentimentUsecase) scoreUnscoredArticles(ctx context.Context, code stock.StockCode, articles []sentiment.Article, now time.Time) {
 	var indexes []int
 	for i, a := range articles {
@@ -234,29 +244,38 @@ func (u *GetNewsSentimentUsecase) scoreUnscoredArticles(ctx context.Context, cod
 	if len(indexes) == 0 {
 		return
 	}
-	targets := make([]sentiment.Article, len(indexes))
-	ids := make([]string, len(indexes))
-	for k, i := range indexes {
-		targets[k] = articles[i]
-		ids[k] = articles[i].ID
-	}
-
-	judgements, err := u.scorer.ScoreArticles(ctx, targets)
-	if err != nil {
-		log.Printf("WARN article sentiment scoring failed for %s: %v", code, err)
-		return
-	}
 	scoredBy := u.scorer.Name()
-	if err := u.repo.SaveJudgements(ctx, ids, judgements, scoredBy, now); err != nil {
-		log.Printf("WARN save article judgements failed for %s: %v", code, err)
-		return
-	}
-	for k, i := range indexes {
-		label, confidence, at := judgements[k].Sentiment, judgements[k].Confidence, now
-		articles[i].Sentiment = &label
-		articles[i].Confidence = &confidence
-		articles[i].ScoredBy = &scoredBy
-		articles[i].ScoredAt = &at
+
+	for start := 0; start < len(indexes); start += articleScoringBatchSize {
+		end := start + articleScoringBatchSize
+		if end > len(indexes) {
+			end = len(indexes)
+		}
+		chunk := indexes[start:end]
+
+		targets := make([]sentiment.Article, len(chunk))
+		ids := make([]string, len(chunk))
+		for k, i := range chunk {
+			targets[k] = articles[i]
+			ids[k] = articles[i].ID
+		}
+
+		judgements, err := u.scorer.ScoreArticles(ctx, targets)
+		if err != nil {
+			log.Printf("WARN article sentiment scoring failed for %s (articles %d-%d): %v", code, start, end, err)
+			continue
+		}
+		if err := u.repo.SaveJudgements(ctx, ids, judgements, scoredBy, now); err != nil {
+			log.Printf("WARN save article judgements failed for %s (articles %d-%d): %v", code, start, end, err)
+			continue
+		}
+		for k, i := range chunk {
+			label, confidence, at := judgements[k].Sentiment, judgements[k].Confidence, now
+			articles[i].Sentiment = &label
+			articles[i].Confidence = &confidence
+			articles[i].ScoredBy = &scoredBy
+			articles[i].ScoredAt = &at
+		}
 	}
 }
 

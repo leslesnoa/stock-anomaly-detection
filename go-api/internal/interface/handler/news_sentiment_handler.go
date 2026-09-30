@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -93,6 +94,7 @@ func (h *NewsSentimentHandler) NewsSentiment(w http.ResponseWriter, r *http.Requ
 	case errors.Is(err, watchlist.ErrNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
 	default:
+		log.Printf("ERROR news sentiment %s: %v", r.PathValue("code"), err)
 		writeError(w, http.StatusInternalServerError, "internal server error")
 	}
 }
