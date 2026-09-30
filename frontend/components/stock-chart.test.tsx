@@ -438,7 +438,7 @@ describe("StockChart direction model badge", () => {
     expect(downLabel).toHaveClass("text-red-600");
   });
 
-  it("adopted=trueでもpredicted_directionがnullなら方向ラベルを出さず的中率文のみ表示する", () => {
+  it("adopted=trueでもpredicted_directionがnullならバッジ自体を表示しない", () => {
     const data = baseChartData();
     data.forecast!.direction_model = {
       adopted: true,
@@ -450,9 +450,9 @@ describe("StockChart direction model badge", () => {
       trained_at: "2026-09-29T00:00:00Z",
     };
     render(<StockChart data={data} />);
-    expect(screen.getByText(/AIモデルによる方向予測/)).toBeInTheDocument();
-    expect(screen.queryByText(/上昇\(強気\)/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/下落\(弱気\)/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/AIモデルによる方向予測/),
+    ).not.toBeInTheDocument();
   });
 
   it("adopted=trueでもhit_rateがnullならバッジを表示しない", () => {

@@ -255,23 +255,25 @@ export function StockChart({ data }: { data: StockChartData }) {
           ))}
         </ComposedChart>
       </ResponsiveContainer>
-      {directionModel?.adopted && directionModel.hit_rate != null && (
-        <p className="text-xs text-muted-foreground" role="status">
-          AIモデルによる方向予測:{" "}
-          {(() => {
-            const label = directionLabel(directionModel.predicted_direction);
-            return label ? (
-              <span className={`font-semibold ${label.colorClass}`}>
-                {label.arrow} {label.text}
-              </span>
-            ) : null;
-          })()}
-          （過去データでの的中率
-          {Math.round((directionModel.hit_rate ?? 0) * 100)}
-          %、既存手法比で統計的に有意）。
-          この的中率は過去データでの検証結果であり、将来の的中を保証しないことにご注意ください。
-        </p>
-      )}
+      {directionModel?.adopted &&
+        directionModel.hit_rate != null &&
+        directionModel.predicted_direction != null && (
+          <p className="text-xs text-muted-foreground" role="status">
+            AIモデルによる方向予測:{" "}
+            {(() => {
+              const label = directionLabel(directionModel.predicted_direction);
+              return label ? (
+                <span className={`font-semibold ${label.colorClass}`}>
+                  <span aria-hidden="true">{label.arrow}</span> {label.text}
+                </span>
+              ) : null;
+            })()}
+            （過去データでの的中率
+            {Math.round((directionModel.hit_rate ?? 0) * 100)}
+            %、既存手法比で統計的に有意）。
+            この的中率は過去データでの検証結果であり、将来の的中を保証しないことにご注意ください。
+          </p>
+        )}
       <p className="text-xs text-muted-foreground">
         統計的期待レンジは直近120営業日の対数リターンの平均と標準偏差から算出した
         ドリフト＋ボラティリティ区間であり、価格予測ではありません。アラート境界は
