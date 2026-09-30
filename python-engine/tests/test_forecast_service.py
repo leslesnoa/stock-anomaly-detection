@@ -42,3 +42,46 @@ def test_calculate_forecast_band_widens_with_horizon():
     width_h20 = result.points[19].upper_95 - result.points[19].lower_95
 
     assert width_h20 > width_h1
+
+
+import pytest
+
+from app.services.direction_model import direction_model_state
+from app.services.forecast import calculate_forecast
+
+
+@pytest.fixture(autouse=True)
+def _reset_direction_model_state():
+    direction_model_state.reset()
+    yield
+    direction_model_state.reset()
+
+
+def test_calculate_forecast_direction_model_is_not_adopted_by_default():
+    prices = [100.0 * (1.01**i) for i in range(ESTIMATION_WINDOW + 1)]
+    result = calculate_forecast("7203", prices[-1], prices)
+    assert result.direction_model.adopted is False
+    assert result.direction_model.hit_rate is None
+
+
+def test_calculate_forecast_center_unchanged_when_not_adopted():
+    prices = [100.0 * (1.01**i) for i in range(ESTIMATION_WINDOW + 1)]
+    result = calculate_forecast("7203", prices[-1], prices)
+    # 既存の計算式通り: center = current_price * exp(mu*h)、上昇トレンドなのでcenterは上向き
+    assert result.points[0].center > prices[-1]
+
+
+def test_calculate_forecast_flips_center_sign_when_adopted_and_disagrees(monkeypatch):
+    prices = [100.0 * (1.01**i) for i in range(ESTIMATION_WINDOW + 1)]  # 上昇トレンド（mu > 0）
+
+    # direction_model_stateを「採用済み・down予測」に強制する。predict_directionの上書きは
+    # monkeypatchで行う（reset()はDirectionModelStateが持つ属性しか戻さないため、
+    # インスタンスに直接代入すると次のテストに漏れて汚染する）。
+    monkeypatch.setattr(direction_model_state, "predict_direction", lambda features: "down")
+    direction_model_state._status.adopted = True
+
+    result = calculate_forecast("7203", prices[-1], prices)
+    # 元のmu(>0)を符号反転しただけなので、centerは現在値より低くなる
+    assert result.points[0].center < prices[-1]
+    assert result.direction_model.adopted is True
+    assert result.direction_model.predicted_direction == "down"

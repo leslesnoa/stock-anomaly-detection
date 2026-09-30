@@ -26,6 +26,10 @@ const watchlistRefreshInterval = 5 * time.Minute
 // Yahoo Finance へ一斉にリクエストを投げないための間隔。
 const startupBackfillInterval = 2 * time.Second
 
+// directionModelRetrainDefaultInterval はAI方向分類器の再学習をどれくらいの
+// 間隔で走らせるかのデフォルト値。DIRECTION_MODEL_RETRAIN_INTERVAL で上書き可能。
+const directionModelRetrainDefaultInterval = 24 * time.Hour
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -63,6 +67,15 @@ func main() {
 		}
 	}
 
+	directionModelRetrainInterval := directionModelRetrainDefaultInterval
+	if v := os.Getenv("DIRECTION_MODEL_RETRAIN_INTERVAL"); v != "" {
+		var err error
+		directionModelRetrainInterval, err = time.ParseDuration(v)
+		if err != nil {
+			log.Fatalf("invalid DIRECTION_MODEL_RETRAIN_INTERVAL: %v", err)
+		}
+	}
+
 	databaseURL := mustEnv("DATABASE_URL")
 	if err := persistence.RunMigrations(databaseURL, migrations.FS); err != nil {
 		log.Fatalf("failed to run migrations: %v", err)
@@ -94,6 +107,7 @@ func main() {
 	loginUsecase := usecase.NewLoginUserUsecase(userRepo, hasher, tokenService)
 	watchlistUsecase := usecase.NewManageWatchlistUsecase(watchlistRepo, backfillUsecase, priceFetcher)
 	chartUsecase := usecase.NewGetStockChartUsecase(watchlistRepo, priceRepo, detector, pythonEngineClient, notificationRepo, threshold)
+	directionModelUsecase := usecase.NewTrainDirectionModelUsecase(watchlistRepo, priceRepo, pythonEngineClient)
 
 	authHandler := handler.NewAuthHandler(registerUsecase, loginUsecase)
 	watchlistHandler := handler.NewWatchlistHandler(watchlistUsecase)
@@ -124,10 +138,15 @@ func main() {
 		}
 	}()
 
-	// 起動時バックフィル: daily_prices に十分な履歴（historySize件）が無い銘柄をYahooから取得して埋める。
-	// 2026-09-24以前の旧Redisキャッシュには日付が保存されていなかったため移行できず、既存銘柄は
-	// ここで取り直す。historySize件以上の履歴がある銘柄は Run がDB参照1回でスキップするので、
-	// 2回目以降の起動では実質ノーオペレーションになる。
+	// 起動時バックフィル: daily_prices に十分な履歴（backfillDays件、マージン込み）が
+	// 無い銘柄をYahooから取得して埋める。2026-09-24以前の旧Redisキャッシュには日付が
+	// 保存されていなかったため移行できず、既存銘柄はここで取り直す。
+	// この閾値はhistorySize（30件）ではなくbackfillDays（1200件、マージン込みで1170件）
+	// 基準のため、この変更をデプロイした直後の最初の再起動では、既存watchlist銘柄の
+	// ほとんど（旧backfillDays=500時代にバックフィル済みのもの）が再取得対象になり
+	// ノーオペレーションにはならない。各銘柄が1200件（マージン込み）まで到達した
+	// 以降の再起動でようやくDB参照1回でスキップされる、実質的なノーオペレーションに
+	// 安定する。
 	// HTTPサーバーと監視ループを待たせないよう goroutine で回す。
 	go func() {
 		codes, err := watchlistRepo.FindAllStockCodes(ctx)
@@ -138,6 +157,12 @@ func main() {
 		log.Printf("startup backfill: checking %d stocks", len(codes))
 		backfillUsecase.RunAll(ctx, codes, startupBackfillInterval)
 		log.Println("startup backfill finished")
+	}()
+
+	// AI方向分類器の再学習を directionModelRetrainInterval 間隔で回す。
+	// HTTPサーバーと監視ループを待たせないよう goroutine で回す。
+	go func() {
+		directionModelUsecase.RunPeriodically(ctx, directionModelRetrainInterval)
 	}()
 
 	log.Printf("monitoring watchlist stocks (threshold=%.1fσ, poll=%02d:%02d JST, refresh=%s)",

@@ -102,6 +102,15 @@ const baseData: StockChartData = {
         lower_95: 3180.0,
       },
     ],
+    direction_model: {
+      adopted: false,
+      predicted_direction: null,
+      hit_rate: null,
+      baseline_hit_rate: null,
+      p_value: null,
+      independent_sample_count: null,
+      trained_at: null,
+    },
   },
   notifications: [
     {
@@ -341,5 +350,91 @@ describe("sliceToDisplayWindow", () => {
 
     expect(sliced.prices).toHaveLength(10);
     expect(sliced.alert_band).toHaveLength(10);
+  });
+});
+
+function baseChartData(
+  overrides: Partial<StockChartData> = {},
+): StockChartData {
+  return {
+    stock_code: "7203",
+    current_price: 3300,
+    prices: [{ date: "2026-09-01", close: 3300 }],
+    alert_band: [],
+    current_z_score: null,
+    forecast: {
+      horizon: 20,
+      points: [
+        {
+          step: 1,
+          center: 3350,
+          upper_68: 3400,
+          lower_68: 3300,
+          upper_95: 3450,
+          lower_95: 3250,
+        },
+      ],
+      direction_model: {
+        adopted: false,
+        predicted_direction: null,
+        hit_rate: null,
+        baseline_hit_rate: null,
+        p_value: null,
+        independent_sample_count: null,
+        trained_at: null,
+      },
+    },
+    notifications: [],
+    ...overrides,
+  };
+}
+
+describe("StockChart direction model badge", () => {
+  it("adopted=falseの場合はバッジを表示しない", () => {
+    render(<StockChart data={baseChartData()} />);
+    expect(
+      screen.queryByText(/AIモデルによる方向予測/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("adopted=trueの場合はバッジと的中率を表示する", () => {
+    const data = baseChartData();
+    data.forecast!.direction_model = {
+      adopted: true,
+      predicted_direction: "up",
+      hit_rate: 0.57,
+      baseline_hit_rate: 0.5,
+      p_value: 0.01,
+      independent_sample_count: 120,
+      trained_at: "2026-09-29T00:00:00Z",
+    };
+    render(<StockChart data={data} />);
+    expect(screen.getByText(/AIモデルによる方向予測/)).toBeInTheDocument();
+    expect(screen.getByText(/57%/)).toBeInTheDocument();
+    expect(screen.getByText(/将来の的中を保証しない/)).toBeInTheDocument();
+  });
+
+  it("adopted=trueでもhit_rateがnullならバッジを表示しない", () => {
+    // go-api側の修正でこの状態には到達しなくなったはずだが、UIが「的中率0%、
+    // 統計的に有意」という内部矛盾した表示をしないことを多層防御として保証する。
+    const data = baseChartData();
+    data.forecast!.direction_model = {
+      adopted: true,
+      predicted_direction: "up",
+      hit_rate: null,
+      baseline_hit_rate: null,
+      p_value: null,
+      independent_sample_count: null,
+      trained_at: null,
+    };
+    render(<StockChart data={data} />);
+    expect(
+      screen.queryByText(/AIモデルによる方向予測/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("forecastがnullでもクラッシュしない", () => {
+    render(<StockChart data={baseChartData({ forecast: null })} />);
+    expect(screen.getByText("予測を取得できませんでした")).toBeInTheDocument();
   });
 });

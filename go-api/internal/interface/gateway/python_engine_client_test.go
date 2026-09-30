@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stock-anomaly-detection/go-api/internal/domain/directionmodel"
 	"github.com/stock-anomaly-detection/go-api/internal/domain/stock"
 	"github.com/stock-anomaly-detection/go-api/internal/interface/gateway"
 	"github.com/stretchr/testify/assert"
@@ -126,4 +127,111 @@ func TestPythonEngineClient_Forecast_ServerError(t *testing.T) {
 
 	_, err := client.Forecast(context.Background(), code, 3250.0, make([]float64, 121))
 	require.Error(t, err)
+}
+
+func TestPythonEngineClient_Train(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /model/train", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		stocks := body["stocks"].([]interface{})
+		require.Len(t, stocks, 1)
+		first := stocks[0].(map[string]interface{})
+		assert.Equal(t, "7203", first["stock_code"])
+		prices := first["prices"].([]interface{})
+		require.Len(t, prices, 2)
+		firstPrice := prices[0].(map[string]interface{})
+		assert.Equal(t, "2026-07-06", firstPrice["date"])
+		assert.Equal(t, 3200.0, firstPrice["close"])
+
+		hitRate := 0.55
+		pValue := 0.01
+		samples := 120
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]interface{}{
+			"adopted":                  true,
+			"hit_rate":                 hitRate,
+			"baseline_hit_rate":        0.50,
+			"p_value":                  pValue,
+			"independent_sample_count": samples,
+			"trained_at":               "2026-09-29T00:00:00Z",
+		}))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewPythonEngineClient(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+
+	series := []directionmodel.PriceSeries{
+		{
+			StockCode: code,
+			Quotes: []stock.Quote{
+				{Price: 3200.0, Date: "2026-07-06"},
+				{Price: 3250.0, Date: "2026-07-07"},
+			},
+		},
+	}
+
+	got, err := client.Train(context.Background(), series)
+	require.NoError(t, err)
+	assert.True(t, got.Adopted)
+	require.NotNil(t, got.HitRate)
+	assert.InDelta(t, 0.55, *got.HitRate, 0.001)
+	require.NotNil(t, got.IndependentSampleCount)
+	assert.Equal(t, 120, *got.IndependentSampleCount)
+}
+
+func TestPythonEngineClient_Train_ServerError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /model/train", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewPythonEngineClient(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+
+	_, err := client.Train(context.Background(), []directionmodel.PriceSeries{
+		{StockCode: code, Quotes: []stock.Quote{{Price: 3200.0, Date: "2026-07-06"}}},
+	})
+	require.Error(t, err)
+}
+
+func TestPythonEngineClient_Forecast_IncludesDirectionModel(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /forecast", func(w http.ResponseWriter, r *http.Request) {
+		predictedDirection := "up"
+		hitRate := 0.55
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]interface{}{
+			"stock_code": "7203",
+			"horizon":    20,
+			"points":     []interface{}{},
+			"direction_model": map[string]interface{}{
+				"adopted":                  true,
+				"predicted_direction":      predictedDirection,
+				"hit_rate":                 hitRate,
+				"baseline_hit_rate":        0.50,
+				"p_value":                  0.01,
+				"independent_sample_count": 120,
+				"trained_at":               "2026-09-29T00:00:00Z",
+			},
+		}))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewPythonEngineClient(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+
+	got, err := client.Forecast(context.Background(), code, 3300.0, make([]float64, 130))
+	require.NoError(t, err)
+	assert.True(t, got.DirectionModel.Adopted)
+	require.NotNil(t, got.DirectionModel.PredictedDirection)
+	assert.Equal(t, "up", *got.DirectionModel.PredictedDirection)
 }

@@ -65,7 +65,51 @@ class ForecastPoint(BaseModel):
     lower_95: float
 
 
+class DirectionModelInfo(BaseModel):
+    adopted: bool
+    predicted_direction: str | None
+    hit_rate: float | None
+    baseline_hit_rate: float | None
+    p_value: float | None
+    independent_sample_count: int | None
+    trained_at: str | None
+
+
 class ForecastResponse(BaseModel):
     stock_code: str
     horizon: int
     points: list[ForecastPoint]
+    direction_model: DirectionModelInfo
+
+
+class ModelTrainPricePoint(BaseModel):
+    date: str
+    close: float
+
+
+class ModelTrainStock(BaseModel):
+    stock_code: str
+    prices: list[ModelTrainPricePoint]
+
+
+class ModelTrainRequest(BaseModel):
+    stocks: list[ModelTrainStock]
+
+
+class ModelTrainResponse(BaseModel):
+    adopted: bool
+    hit_rate: float | None
+    baseline_hit_rate: float | None
+    p_value: float | None
+    independent_sample_count: int | None
+    trained_at: str | None
+
+
+class ModelStatusResponse(BaseModel):
+    adopted: bool
+    hit_rate: float | None
+    baseline_hit_rate: float | None
+    p_value: float | None
+    independent_sample_count: int | None
+    trained_at: str | None
+    recent_results: list[bool]

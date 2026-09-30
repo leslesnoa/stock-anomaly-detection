@@ -15,9 +15,24 @@ type Point struct {
 	Lower95 float64
 }
 
+// DirectionModel はPhase 2のAI方向分類器の状態。Adoptedがfalseの場合、
+// 他のフィールドはnilになりうる（未学習、またはwalk-forwardで既存の
+// ドリフト中心線に対する優位性を示せなかった状態）。
+// docs/superpowers/specs/2026-09-29-chart-direction-classifier-design.md 参照。
+type DirectionModel struct {
+	Adopted                bool
+	PredictedDirection     *string
+	HitRate                *float64
+	BaselineHitRate        *float64
+	PValue                 *float64
+	IndependentSampleCount *int
+	TrainedAt              *string
+}
+
 type Forecast struct {
-	Horizon int
-	Points  []Point
+	Horizon        int
+	Points         []Point
+	DirectionModel DirectionModel
 }
 
 // Forecaster は将来の価格レンジ（ドリフト＋ボラティリティ帯）を計算する。

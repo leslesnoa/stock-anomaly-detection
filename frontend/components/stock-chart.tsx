@@ -20,9 +20,11 @@ import type {
 
 export type ChartPeriod = "1M" | "3M" | "6M" | "1Y" | "2Y";
 
-// 各期間ボタンに対応する営業日数。1ヶ月≒21営業日で概算。2Yはバックフィル上限
-// （backfillDays=500営業日、go-api側 usecase.BackfillPriceHistoryUsecase）と一致させ、
-// 取得済みデータの実質フルレンジを表す。
+// 各期間ボタンに対応する営業日数。1ヶ月≒21営業日で概算。
+// go-api側のbackfillDays（usecase.BackfillPriceHistoryUsecase）は現在1200営業日
+// （約5年、AI方向分類器の学習に必要な独立サンプル数確保のため）まで取得しているが、
+// チャート表示の期間ボタンは実用上の見やすさを優先して2Yまでに留めている
+// （バックフィル済みデータの一部のみを表示する形になる）。
 export const PERIOD_TRADING_DAYS: Record<ChartPeriod, number> = {
   "1M": 21,
   "3M": 63,
@@ -161,6 +163,7 @@ export function StockChart({ data }: { data: StockChartData }) {
   const markerRows = rows.filter(
     (r) => r.notification !== undefined && r.close !== undefined,
   );
+  const directionModel = data.forecast?.direction_model;
 
   return (
     <div className="space-y-2">
@@ -240,6 +243,14 @@ export function StockChart({ data }: { data: StockChartData }) {
           ))}
         </ComposedChart>
       </ResponsiveContainer>
+      {directionModel?.adopted && directionModel.hit_rate != null && (
+        <p className="text-xs text-muted-foreground" role="status">
+          AIモデルによる方向予測（過去データでの的中率
+          {Math.round((directionModel.hit_rate ?? 0) * 100)}
+          %、既存手法比で統計的に有意）。
+          この的中率は過去データでの検証結果であり、将来の的中を保証しないことにご注意ください。
+        </p>
+      )}
       <p className="text-xs text-muted-foreground">
         統計的期待レンジは直近120営業日の対数リターンの平均と標準偏差から算出した
         ドリフト＋ボラティリティ区間であり、価格予測ではありません。アラート境界は

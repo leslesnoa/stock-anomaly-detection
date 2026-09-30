@@ -74,17 +74,20 @@ func (c *YahooFinanceClient) FetchHistory(code stock.StockCode, days int) ([]sto
 }
 
 // historyRange は必要な営業日数を満たす最小のYahoo chart APIレンジを選ぶ。
-// 日本市場の営業日は年約245日なので、3mo≒60日・1y≒245日・2y≒490日として閾値を置く。
-// 必要以上に長いレンジを常用するとレスポンスサイズとパース時間が無駄に増えるため、
-// 用途（監視ウィンドウ30件 / チャート用2年）に応じて切り替える。
+// 日本市場の営業日は年約245日なので、3mo≒60日・1y≒245日・2y≒490日・5y≒1225日として
+// 閾値を置く。必要以上に長いレンジを常用するとレスポンスサイズとパース時間が無駄に
+// 増えるため、用途（監視ウィンドウ30件 / チャート・AI方向分類器の学習用に
+// backfillDays=1200）に応じて切り替える。
 func historyRange(days int) string {
 	switch {
 	case days <= 60:
 		return "3mo"
 	case days <= 250:
 		return "1y"
-	default:
+	case days <= 490:
 		return "2y"
+	default:
+		return "5y"
 	}
 }
 

@@ -472,7 +472,9 @@ func TestYahooFinanceClient_FetchHistory_SelectsRangeFromRequestedDays(t *testin
 		{name: "61営業日は1y", days: 61, expectedRange: "1y"},
 		{name: "境界の250営業日は1y", days: 250, expectedRange: "1y"},
 		{name: "251営業日は2y", days: 251, expectedRange: "2y"},
-		{name: "500営業日は2y", days: 500, expectedRange: "2y"},
+		{name: "境界の490営業日は2y", days: 490, expectedRange: "2y"},
+		{name: "491営業日は5y", days: 491, expectedRange: "5y"},
+		{name: "1200営業日は5y", days: 1200, expectedRange: "5y"},
 	}
 
 	for _, tt := range tests {
