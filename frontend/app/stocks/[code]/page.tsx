@@ -3,6 +3,7 @@ import { fetchStockChart } from "@/lib/go-api-client";
 import { requireToken } from "@/lib/auth";
 import { SiteHeader } from "@/components/site-header";
 import { StockChart } from "@/components/stock-chart";
+import { NewsSentimentPanel } from "@/components/news-sentiment-panel";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 export default async function StockDetailPage({
@@ -55,6 +56,7 @@ export default async function StockDetailPage({
             <StockChart data={chart} />
           </CardContent>
         </Card>
+        <NewsSentimentPanel stockCode={chart.stock_code} />
       </main>
     </div>
   );
