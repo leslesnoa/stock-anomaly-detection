@@ -17,6 +17,12 @@ import (
 // 2026-09-29以前は500日（約2年、AI方向分類器の学習には不足していた）だった。
 const backfillDays = 1200
 
+// backfillCompletionMargin はスキップ判定でbackfillDaysちょうどではなく多少の欠け
+// （上場から日が浅い銘柄、取引停止日、Yahoo側の集計誤差等）を許容するための下限
+// マージン。実測ではrange=5yで約1221件返るためbackfillDays(1200)との差はわずか
+// 約21件しかなく、マージンが無いと際どい銘柄が毎回再取得され続けてしまう。
+const backfillCompletionMargin = 30
+
 // BackfillPriceHistoryUsecase は新規watchlist追加時に、過去の値動きを
 // daily_prices へ一括投入する。異常検知が有効になるまでのウォームアップ期間
 // （historySize件分の日次ポーリング待ち）を短縮し、同時にチャート描画に
@@ -30,24 +36,25 @@ func NewBackfillPriceHistoryUsecase(fetcher stock.PriceFetcher, prices stock.Pri
 	return &BackfillPriceHistoryUsecase{fetcher: fetcher, prices: prices}
 }
 
-// Run はcodeの価格履歴がbackfillDays件未満の場合は過去backfillDays件を取得して保存する。
-// 既にbackfillDays件以上の履歴が存在する場合（同一銘柄を別ユーザーが既に監視中、または
+// Run はcodeの価格履歴がbackfillDays件（マージンを許容）未満の場合は過去backfillDays件を
+// 取得して保存する。既に十分な履歴が存在する場合（同一銘柄を別ユーザーが既に監視中、または
 // 過去のバックフィルが正常に完了済み）は何もしない。
 func (u *BackfillPriceHistoryUsecase) Run(ctx context.Context, code stock.StockCode) error {
 	existing, err := u.prices.FindRecent(ctx, code, backfillDays)
 	if err != nil {
 		return fmt.Errorf("check existing history %s: %w", code, err)
 	}
-	// 目標件数（backfillDays）を満たしていない銘柄は取り直す。「1件でもあればスキップ」
-	// にすると、バックフィル失敗直後に日次ポーリングが1件だけ書き込んだ場合、以降どの
-	// 再起動でもスキップされ続け履歴が増えなくなる。2026-09-29以前はhistorySize
-	// （30件）を基準にしていたが、AI方向分類器の学習に必要な独立サンプル数を確保する
-	// ためbackfillDays（1200件）基準に引き上げた。これにより、旧backfillDays=500
-	// 時代に既にバックフィル済みだった既存watchlist銘柄も、次回起動時に1200件まで
-	// 再取得される。上場来データが1200営業日に満たない銘柄は、取得できる全件を
-	// 保存した状態のまま以降の起動でも再取得が走り続けるが（1銘柄あたり起動ごとに
-	// Yahoo Finance呼び出し1回）、SaveAll がON CONFLICT DO NOTHINGのため実害はない。
-	if len(existing) >= backfillDays {
+	// 目標件数（backfillDays、マージン込み）を満たしていない銘柄は取り直す。「1件でも
+	// あればスキップ」にすると、バックフィル失敗直後に日次ポーリングが1件だけ書き込んだ
+	// 場合、以降どの再起動でもスキップされ続け履歴が増えなくなる。2026-09-29以前は
+	// historySize（30件）を基準にしていたが、AI方向分類器の学習に必要な独立サンプル数を
+	// 確保するためbackfillDays（1200件、マージンを引いた1170件以上でスキップ）基準に
+	// 引き上げた。これにより、旧backfillDays=500時代に既にバックフィル済みだった既存
+	// watchlist銘柄も、次回起動時に1200件まで再取得される。上場来データがマージン込みの
+	// 閾値（1170営業日）に満たない銘柄は、取得できる全件を保存した状態のまま以降の起動でも
+	// 再取得が走り続けるが（1銘柄あたり起動ごとにYahoo Finance呼び出し1回）、SaveAll が
+	// ON CONFLICT DO NOTHINGのため実害はない。
+	if len(existing) >= backfillDays-backfillCompletionMargin {
 		return nil
 	}
 

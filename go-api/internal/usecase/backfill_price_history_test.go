@@ -44,8 +44,9 @@ func TestBackfillPriceHistoryUsecase_Run_SkipsWhenHistoryAlreadyExists(t *testin
 
 	// 目標件数（backfillDays=1200件）を満たす履歴が既にある場合のみスキップする
 	full := make([]stock.Quote, 1200)
+	start := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 	for i := range full {
-		full[i] = stock.Quote{Price: 3300.0, Date: fmt.Sprintf("2022-%02d-%02d", (i%12)+1, (i%28)+1)}
+		full[i] = stock.Quote{Price: 3300.0, Date: start.AddDate(0, 0, i).Format("2006-01-02")}
 	}
 	prices.On("FindRecent", ctx, code, 1200).Return(full, nil)
 
@@ -103,6 +104,33 @@ func TestBackfillPriceHistoryUsecase_Run_RefetchesWhenHistoryIsPartial(t *testin
 		{Price: 3250.0, Date: "2026-07-07"},
 	}
 	prices.On("FindRecent", ctx, code, 1200).Return(partial, nil)
+	fetcher.On("FetchHistory", code, 1200).Return(fetched, nil)
+	prices.On("SaveAll", ctx, code, fetched).Return(nil)
+
+	uc := usecase.NewBackfillPriceHistoryUsecase(fetcher, prices)
+	err := uc.Run(ctx, code)
+
+	require.NoError(t, err)
+	prices.AssertExpectations(t)
+	fetcher.AssertExpectations(t)
+}
+
+func TestBackfillPriceHistoryUsecase_Run_RefetchesStockBackfilledUnderOldShallowerDepth(t *testing.T) {
+	fetcher := &MockPriceFetcher{}
+	prices := &MockPriceRepository{}
+	code, _ := stock.NewStockCode("7203")
+	ctx := context.Background()
+
+	// 旧backfillDays=500時代に既にバックフィル済みだった典型的な本番銘柄を模擬する。
+	// historySize(30)は満たすが、新しいbackfillDays(1200、マージン込みで1170)には
+	// 遠く届かないため、このコミットの変更がなければ永久にスキップされ続けていたケース。
+	existing := make([]stock.Quote, 500)
+	for i := range existing {
+		existing[i] = stock.Quote{Price: 3300.0, Date: fmt.Sprintf("existing-%d", i)}
+	}
+	fetched := []stock.Quote{{Price: 3200.0, Date: "2026-07-06"}}
+
+	prices.On("FindRecent", ctx, code, 1200).Return(existing, nil)
 	fetcher.On("FetchHistory", code, 1200).Return(fetched, nil)
 	prices.On("SaveAll", ctx, code, fetched).Return(nil)
 
