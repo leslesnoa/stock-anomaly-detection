@@ -168,3 +168,45 @@ export async function fetchStockChart(
   }
   return toFailure(res);
 }
+
+export type NewsSentimentLabel = "bullish" | "bearish" | "neutral";
+export type NewsSentimentScores = {
+  bullish: number;
+  bearish: number;
+  impact: number;
+  confidence: number;
+  short_term_up_probability: number;
+};
+export type NewsArticle = {
+  title: string;
+  url: string;
+  published_at: string;
+  sentiment: NewsSentimentLabel | null;
+  sentiment_confidence: number | null;
+};
+export type NewsSentiment = {
+  status: "ready" | "pending";
+  stale: boolean;
+  scores: NewsSentimentScores | null;
+  scored_by: string | null;
+  scored_at: string | null;
+  articles: NewsArticle[];
+};
+
+export async function fetchNewsSentiment(
+  token: string,
+  stockCode: string,
+): Promise<{ ok: true; sentiment: NewsSentiment } | ApiFailure> {
+  const res = await fetch(
+    `${getGoApiUrl()}/stocks/${encodeURIComponent(stockCode)}/news-sentiment`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    },
+  );
+  if (res.status === 200) {
+    const sentiment = (await res.json()) as NewsSentiment;
+    return { ok: true, sentiment };
+  }
+  return toFailure(res);
+}
