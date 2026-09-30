@@ -52,7 +52,18 @@ func (r *PgSentimentRepository) SaveJudgements(ctx context.Context, articleIDs [
 			 WHERE id = $1`,
 			id, string(judgements[i].Sentiment), judgements[i].Confidence, scoredBy, at)
 	}
-	if err := r.conn.SendBatch(ctx, batch).Close(); err != nil {
+	br := r.conn.SendBatch(ctx, batch)
+	defer br.Close()
+	for _, id := range articleIDs {
+		tag, err := br.Exec()
+		if err != nil {
+			return fmt.Errorf("save judgements: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return fmt.Errorf("save judgements: article %s not found", id)
+		}
+	}
+	if err := br.Close(); err != nil {
 		return fmt.Errorf("save judgements: %w", err)
 	}
 	return nil

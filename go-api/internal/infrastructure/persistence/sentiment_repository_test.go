@@ -102,6 +102,9 @@ func TestPgSentimentRepository_SaveJudgements(t *testing.T) {
 	assert.True(t, got[0].ScoredAt.Equal(scoredAt))
 
 	require.Error(t, repo.SaveJudgements(ctx, []string{articles[0].ID}, nil, "claude", scoredAt), "件数不一致はエラー")
+
+	require.Error(t, repo.SaveJudgements(ctx, []string{"00000000-0000-0000-0000-000000000000"},
+		[]sentiment.ArticleJudgement{{Sentiment: sentiment.Bullish, Confidence: 81}}, "claude", scoredAt), "存在しないarticleIdはエラー")
 }
 
 func TestPgSentimentRepository_Snapshots(t *testing.T) {
