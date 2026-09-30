@@ -397,7 +397,7 @@ describe("StockChart direction model badge", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("adopted=trueの場合はバッジと的中率を表示する", () => {
+  it("adopted=trueの場合はバッジと方向ラベル・的中率を表示する（up）", () => {
     const data = baseChartData();
     data.forecast!.direction_model = {
       adopted: true,
@@ -412,6 +412,47 @@ describe("StockChart direction model badge", () => {
     expect(screen.getByText(/AIモデルによる方向予測/)).toBeInTheDocument();
     expect(screen.getByText(/57%/)).toBeInTheDocument();
     expect(screen.getByText(/将来の的中を保証しない/)).toBeInTheDocument();
+    const upLabel = screen.getByText(/上昇\(強気\)/);
+    expect(upLabel).toBeInTheDocument();
+    expect(upLabel).toHaveTextContent("↑");
+    expect(upLabel).toHaveClass("text-green-600");
+  });
+
+  it("adopted=trueの場合はバッジと方向ラベル・的中率を表示する（down）", () => {
+    const data = baseChartData();
+    data.forecast!.direction_model = {
+      adopted: true,
+      predicted_direction: "down",
+      hit_rate: 0.6,
+      baseline_hit_rate: 0.5,
+      p_value: 0.02,
+      independent_sample_count: 130,
+      trained_at: "2026-09-29T00:00:00Z",
+    };
+    render(<StockChart data={data} />);
+    expect(screen.getByText(/AIモデルによる方向予測/)).toBeInTheDocument();
+    expect(screen.getByText(/60%/)).toBeInTheDocument();
+    const downLabel = screen.getByText(/下落\(弱気\)/);
+    expect(downLabel).toBeInTheDocument();
+    expect(downLabel).toHaveTextContent("↓");
+    expect(downLabel).toHaveClass("text-red-600");
+  });
+
+  it("adopted=trueでもpredicted_directionがnullなら方向ラベルを出さず的中率文のみ表示する", () => {
+    const data = baseChartData();
+    data.forecast!.direction_model = {
+      adopted: true,
+      predicted_direction: null,
+      hit_rate: 0.55,
+      baseline_hit_rate: 0.5,
+      p_value: 0.03,
+      independent_sample_count: 100,
+      trained_at: "2026-09-29T00:00:00Z",
+    };
+    render(<StockChart data={data} />);
+    expect(screen.getByText(/AIモデルによる方向予測/)).toBeInTheDocument();
+    expect(screen.queryByText(/上昇\(強気\)/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/下落\(弱気\)/)).not.toBeInTheDocument();
   });
 
   it("adopted=trueでもhit_rateがnullならバッジを表示しない", () => {
