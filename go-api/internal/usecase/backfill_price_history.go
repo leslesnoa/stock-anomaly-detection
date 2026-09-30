@@ -30,20 +30,24 @@ func NewBackfillPriceHistoryUsecase(fetcher stock.PriceFetcher, prices stock.Pri
 	return &BackfillPriceHistoryUsecase{fetcher: fetcher, prices: prices}
 }
 
-// Run はcodeの価格履歴がhistorySize件未満の場合のみ過去backfillDays件を取得して保存する。
-// 既にhistorySize件以上の履歴が存在する場合（同一銘柄を別ユーザーが既に監視中、または
+// Run はcodeの価格履歴がbackfillDays件未満の場合は過去backfillDays件を取得して保存する。
+// 既にbackfillDays件以上の履歴が存在する場合（同一銘柄を別ユーザーが既に監視中、または
 // 過去のバックフィルが正常に完了済み）は何もしない。
 func (u *BackfillPriceHistoryUsecase) Run(ctx context.Context, code stock.StockCode) error {
-	existing, err := u.prices.FindRecent(ctx, code, historySize)
+	existing, err := u.prices.FindRecent(ctx, code, backfillDays)
 	if err != nil {
 		return fmt.Errorf("check existing history %s: %w", code, err)
 	}
-	// 監視ウィンドウ（historySize件）を満たしていない銘柄は取り直す。
-	// 「1件でもあればスキップ」にすると、003適用前の起動やYahoo障害でバックフィルが
-	// 失敗した直後に日次ポーリングが1件だけ書き込んだ場合、以降どの再起動でも
-	// スキップされ続け、異常検知が約30営業日ぶん無言で止まる。
-	// SaveAll は ON CONFLICT DO NOTHING なので、再取得しても既存行は壊れない。
-	if len(existing) >= historySize {
+	// 目標件数（backfillDays）を満たしていない銘柄は取り直す。「1件でもあればスキップ」
+	// にすると、バックフィル失敗直後に日次ポーリングが1件だけ書き込んだ場合、以降どの
+	// 再起動でもスキップされ続け履歴が増えなくなる。2026-09-29以前はhistorySize
+	// （30件）を基準にしていたが、AI方向分類器の学習に必要な独立サンプル数を確保する
+	// ためbackfillDays（1200件）基準に引き上げた。これにより、旧backfillDays=500
+	// 時代に既にバックフィル済みだった既存watchlist銘柄も、次回起動時に1200件まで
+	// 再取得される。上場来データが1200営業日に満たない銘柄は、取得できる全件を
+	// 保存した状態のまま以降の起動でも再取得が走り続けるが（1銘柄あたり起動ごとに
+	// Yahoo Finance呼び出し1回）、SaveAll がON CONFLICT DO NOTHINGのため実害はない。
+	if len(existing) >= backfillDays {
 		return nil
 	}
 
