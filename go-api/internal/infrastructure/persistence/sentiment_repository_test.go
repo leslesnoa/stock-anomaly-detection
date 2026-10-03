@@ -121,7 +121,9 @@ func TestPgSentimentRepository_Snapshots(t *testing.T) {
 
 	newer := older.Add(7 * time.Hour)
 	scores := sentiment.StockScores{Bullish: 72, Bearish: 18, Impact: 55, Confidence: 40, ShortTermUp: 58}
-	id, err := repo.InsertSnapshot(ctx, sentiment.Snapshot{StockCode: "7203", Scores: &scores, ArticleCount: 3, InputFingerprint: "fp-1", ScoredBy: "claude", CreatedAt: newer, CheckedAt: newer})
+	baseClose := 1234.5
+	id, err := repo.InsertSnapshot(ctx, sentiment.Snapshot{StockCode: "7203", Scores: &scores, ArticleCount: 3, InputFingerprint: "fp-1", ScoredBy: "claude",
+		BasePriceDate: "2026-09-29", BaseClose: &baseClose, CreatedAt: newer, CheckedAt: newer})
 	require.NoError(t, err)
 	require.NotEmpty(t, id)
 
@@ -133,6 +135,9 @@ func TestPgSentimentRepository_Snapshots(t *testing.T) {
 	assert.Equal(t, scores, *latest.Scores)
 	assert.Equal(t, 3, latest.ArticleCount)
 	assert.Equal(t, "fp-1", latest.InputFingerprint)
+	assert.Equal(t, "2026-09-29", latest.BasePriceDate)
+	require.NotNil(t, latest.BaseClose)
+	assert.Equal(t, 1234.5, *latest.BaseClose)
 
 	checked := newer.Add(6 * time.Hour)
 	require.NoError(t, repo.TouchSnapshot(ctx, id, checked))
@@ -154,4 +159,6 @@ func TestPgSentimentRepository_SnapshotWithoutScores(t *testing.T) {
 	latest, err := repo.FindLatestSnapshot(ctx, "7203")
 	require.NoError(t, err)
 	assert.Nil(t, latest.Scores)
+	assert.Equal(t, "", latest.BasePriceDate, "株価が無い時の基準日はNULLで保存される")
+	assert.Nil(t, latest.BaseClose)
 }

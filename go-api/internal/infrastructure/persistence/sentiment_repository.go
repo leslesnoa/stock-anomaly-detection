@@ -105,20 +105,25 @@ func (r *PgSentimentRepository) FindArticlesSince(ctx context.Context, stockCode
 func (r *PgSentimentRepository) FindLatestSnapshot(ctx context.Context, stockCode string) (*sentiment.Snapshot, error) {
 	var s sentiment.Snapshot
 	var bullish, bearish, impact, confidence, shortTermUp *int
+	var basePriceDate *time.Time
 	err := r.conn.QueryRow(ctx,
 		`SELECT id::text, stock_code, bullish_score, bearish_score, impact_score, confidence_score,
-		        short_term_up_probability, article_count, input_fingerprint, scored_by, created_at, checked_at
+		        short_term_up_probability, article_count, input_fingerprint, scored_by,
+		        base_price_date, base_close::float8, created_at, checked_at
 		 FROM stock_sentiment_snapshots
 		 WHERE stock_code = $1
 		 ORDER BY created_at DESC
 		 LIMIT 1`,
 		stockCode).Scan(&s.ID, &s.StockCode, &bullish, &bearish, &impact, &confidence, &shortTermUp,
-		&s.ArticleCount, &s.InputFingerprint, &s.ScoredBy, &s.CreatedAt, &s.CheckedAt)
+		&s.ArticleCount, &s.InputFingerprint, &s.ScoredBy, &basePriceDate, &s.BaseClose, &s.CreatedAt, &s.CheckedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("find latest sentiment snapshot %s: %w", stockCode, err)
+	}
+	if basePriceDate != nil {
+		s.BasePriceDate = basePriceDate.Format(dateLayout)
 	}
 	if bullish != nil && bearish != nil && impact != nil && confidence != nil && shortTermUp != nil {
 		s.Scores = &sentiment.StockScores{
@@ -135,15 +140,24 @@ func (r *PgSentimentRepository) InsertSnapshot(ctx context.Context, s sentiment.
 		bullish, bearish, impact = &s.Scores.Bullish, &s.Scores.Bearish, &s.Scores.Impact
 		confidence, shortTermUp = &s.Scores.Confidence, &s.Scores.ShortTermUp
 	}
+	var basePriceDate *time.Time
+	if s.BasePriceDate != "" {
+		d, err := time.Parse(dateLayout, s.BasePriceDate)
+		if err != nil {
+			return "", fmt.Errorf("insert sentiment snapshot %s: parse base price date: %w", s.StockCode, err)
+		}
+		basePriceDate = &d
+	}
 	var id string
 	err := r.conn.QueryRow(ctx,
 		`INSERT INTO stock_sentiment_snapshots
 		   (stock_code, bullish_score, bearish_score, impact_score, confidence_score,
-		    short_term_up_probability, article_count, input_fingerprint, scored_by, created_at, checked_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		    short_term_up_probability, article_count, input_fingerprint, scored_by,
+		    base_price_date, base_close, created_at, checked_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		 RETURNING id::text`,
 		s.StockCode, bullish, bearish, impact, confidence, shortTermUp,
-		s.ArticleCount, s.InputFingerprint, s.ScoredBy, s.CreatedAt, s.CheckedAt).Scan(&id)
+		s.ArticleCount, s.InputFingerprint, s.ScoredBy, basePriceDate, s.BaseClose, s.CreatedAt, s.CheckedAt).Scan(&id)
 	if err != nil {
 		return "", fmt.Errorf("insert sentiment snapshot %s: %w", s.StockCode, err)
 	}

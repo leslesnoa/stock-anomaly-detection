@@ -214,6 +214,11 @@ func (u *GetNewsSentimentUsecase) refresh(ctx context.Context, code stock.StockC
 		CreatedAt:        now,
 		CheckedAt:        now,
 	}
+	if n := len(quotes); n > 0 {
+		closePrice := float64(quotes[n-1].Price)
+		snap.BasePriceDate = quotes[n-1].Date
+		snap.BaseClose = &closePrice
+	}
 	if len(articles) > 0 {
 		scores, err := u.scorer.ScoreStock(ctx, articles, price)
 		if err != nil {

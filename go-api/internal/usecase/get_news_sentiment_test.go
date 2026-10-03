@@ -89,7 +89,9 @@ func TestGetNewsSentiment_ExpiredCacheWithSameInputOnlyTouches(t *testing.T) {
 	code, _ := stock.NewStockCode("7203")
 	articles := []sentiment.Article{scoredArticle("a", "1")}
 	quotes := []stock.Quote{{Price: 1000, Date: "2026-09-28"}, {Price: 1010, Date: "2026-09-29"}}
+	prevClose := 1010.0
 	prev := &sentiment.Snapshot{ID: "snap-1", StockCode: "7203", InputFingerprint: sentiment.Fingerprint(articles, "2026-09-29"),
+		BasePriceDate: "2026-09-29", BaseClose: &prevClose,
 		CreatedAt: sentimentNow.Add(-30 * time.Hour), CheckedAt: sentimentNow.Add(-7 * time.Hour)}
 
 	d.repo.On("FindLatestSnapshot", mock.Anything, "7203").Return(prev, nil)
@@ -109,6 +111,8 @@ func TestGetNewsSentiment_ExpiredCacheWithSameInputOnlyTouches(t *testing.T) {
 	assert.Equal(t, "snap-1", got.Snapshot.ID)
 	assert.Equal(t, sentimentNow, got.Snapshot.CheckedAt)
 	assert.Equal(t, sentimentNow.Add(-7*time.Hour), prev.CheckedAt, "リポジトリから返されたスナップショットは書き換えない")
+	assert.Equal(t, "2026-09-29", got.Snapshot.BasePriceDate, "touchだけの時は前回の基準日を保つ")
+	assert.Equal(t, &prevClose, got.Snapshot.BaseClose)
 	d.scorer.AssertNotCalled(t, "ScoreStock", mock.Anything, mock.Anything, mock.Anything)
 	d.scorer.AssertNotCalled(t, "ScoreArticles", mock.Anything, mock.Anything)
 	d.repo.AssertNotCalled(t, "InsertSnapshot", mock.Anything, mock.Anything)
@@ -143,6 +147,7 @@ func TestGetNewsSentiment_NewArticlesScoresOnlyUnscoredAndInsertsSnapshot(t *tes
 	d.repo.On("InsertSnapshot", mock.Anything, mock.MatchedBy(func(s sentiment.Snapshot) bool {
 		return s.StockCode == "7203" && s.Scores != nil && *s.Scores == scores && s.ArticleCount == 2 &&
 			s.ScoredBy == "claude" && s.InputFingerprint == sentiment.Fingerprint(articles, quotes[29].Date) &&
+			s.BasePriceDate == quotes[29].Date && s.BaseClose != nil && *s.BaseClose == float64(quotes[29].Price) &&
 			s.CreatedAt.Equal(sentimentNow) && s.CheckedAt.Equal(sentimentNow)
 	})).Return("snap-new", nil)
 	uc := d.usecase(2 * time.Second)
@@ -442,4 +447,27 @@ func TestGetNewsSentiment_InvalidStockCode(t *testing.T) {
 
 	_, err := uc.Handle(context.Background(), "user-1", "abc")
 	require.ErrorIs(t, err, stock.ErrInvalidStockCode)
+}
+
+func TestGetNewsSentiment_NoPricesSavesEmptyBasePrice(t *testing.T) {
+	d := newSentimentDeps(t)
+	code, _ := stock.NewStockCode("7203")
+	articles := []sentiment.Article{scoredArticle("a", "1")}
+	scores := sentiment.StockScores{Bullish: 50, Bearish: 50, Impact: 50, Confidence: 50, ShortTermUp: 50}
+
+	d.repo.On("FindLatestSnapshot", mock.Anything, "7203").Return(nil, nil)
+	d.disclosures.On("FetchDisclosures", mock.Anything, code, mock.Anything).Return([]news.Disclosure{}, nil)
+	d.repo.On("UpsertArticles", mock.Anything, mock.Anything).Return(nil)
+	d.repo.On("FindArticlesSince", mock.Anything, "7203", mock.Anything).Return(articles, nil)
+	d.prices.On("FindRecent", mock.Anything, code, 30).Return([]stock.Quote{}, nil)
+	d.scorer.On("ScoreStock", mock.Anything, mock.Anything, mock.Anything).Return(scores, nil)
+	d.repo.On("InsertSnapshot", mock.Anything, mock.MatchedBy(func(s sentiment.Snapshot) bool {
+		return s.BasePriceDate == "" && s.BaseClose == nil
+	})).Return("snap-new", nil)
+	uc := d.usecase(2 * time.Second)
+
+	_, err := uc.Handle(context.Background(), "user-1", "7203")
+	uc.Wait()
+	require.NoError(t, err)
+	d.repo.AssertExpectations(t)
 }

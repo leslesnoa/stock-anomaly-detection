@@ -102,8 +102,12 @@ type Snapshot struct {
 	ArticleCount     int
 	InputFingerprint string
 	ScoredBy         string
-	CreatedAt        time.Time
-	CheckedAt        time.Time
+	// BasePriceDate / BaseClose はスコア算出時点の最新終値（株価が無ければ "" / nil）。
+	// ShortTermUpProbability の答え合わせの基準になる。
+	BasePriceDate string
+	BaseClose     *float64
+	CreatedAt     time.Time
+	CheckedAt     time.Time
 }
 
 // Fingerprint は銘柄スコアの入力（記事集合と最新株価日付）が前回から変わったかを判定するための値。
