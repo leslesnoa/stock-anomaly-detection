@@ -55,7 +55,7 @@ func (j ArticleJudgement) Validate() error {
 
 type PriceContext struct {
 	LatestDate string
-	Return5d   *float64
+	Return5d   *float64 // %（例: 3.2 は +3.2%）。履歴不足ならnil
 	Return20d  *float64
 	ZScore     *float64
 }
@@ -106,12 +106,13 @@ type Snapshot struct {
 	// ShortTermUpProbability の答え合わせの基準になる。
 	BasePriceDate string
 	BaseClose     *float64
-	CreatedAt     time.Time
-	CheckedAt     time.Time
+	CreatedAt     time.Time // スコアを算出した時刻（APIでは scored_at）
+	CheckedAt     time.Time // 入力が同じか最後に確かめた時刻。キャッシュ期限はこちらで判定する
 }
 
 // Fingerprint は銘柄スコアの入力（記事集合と最新株価日付）が前回から変わったかを判定するための値。
 // 入力が同じなのにLLMを呼び直すと、スコアだけが揺れてユーザーに「何か起きた」ように見えるため。
+// 注意: スコアラー名やプロンプトは含めないため、SENTIMENT_SCORER を切り替えても入力が同じなら旧スコアラーのスナップショットを使い続ける。
 func Fingerprint(articles []Article, latestPriceDate string) string {
 	ids := make([]string, len(articles))
 	for i, a := range articles {

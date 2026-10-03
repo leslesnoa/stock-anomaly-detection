@@ -16,6 +16,7 @@ import (
 	"github.com/stock-anomaly-detection/go-api/internal/domain/watchlist"
 )
 
+// フロントの「直近90日」表示と合わせること。
 const newsSentimentLookbackDays = 90
 
 // articleScoringBatchSize は1回の ScoreArticles 呼び出しに含める未判定記事の上限。
@@ -32,7 +33,7 @@ const (
 
 type NewsSentiment struct {
 	Status   NewsSentimentStatus
-	Stale    bool
+	Stale    bool                // キャッシュ期限切れで、裏で更新中か更新に失敗した古いスナップショットを返している
 	Snapshot *sentiment.Snapshot // pending の時は nil
 	Articles []sentiment.Article
 }
@@ -41,9 +42,9 @@ type NewsSentimentConfig struct {
 	CacheTTL time.Duration
 	// WaitTimeout はリクエストが更新処理を待つ上限。http.Server.WriteTimeout（30秒）より短くする。
 	WaitTimeout time.Duration
-	// RefreshTimeout は更新処理全体の上限。TDnet取得、記事判定（最大5チャンク、
-	// チャンクごとにClaude呼び出し最悪45秒×リトライ1回）、銘柄スコア取得（同じく
-	// 最悪45秒×リトライ1回）を合計で収める。リクエスト自体はそれでも WaitTimeout（20秒）で待つのを諦める。
+	// RefreshTimeout は更新処理全体の上限。最悪ケース（TDnet + 記事判定5チャンク + 銘柄スコア、
+	// Claude呼び出しは各45秒×リトライ1回）の合計はこれを超えうるが、超えた分は ctx で打ち切られ、
+	// 未判定の記事は次回の更新で再判定される。
 	RefreshTimeout time.Duration
 	Now            func() time.Time
 }
@@ -130,14 +131,15 @@ func (u *GetNewsSentimentUsecase) Handle(ctx context.Context, userID, rawStockCo
 	return NewsSentiment{Status: NewsSentimentPending, Articles: []sentiment.Article{}}, nil
 }
 
-// Wait は起動済みの更新処理がすべて終わるまで待つ。サーバー停止時に、DBプールを閉じる前に呼ぶ。
+// Wait は起動済みの更新処理がすべて終わるまで待つ。サーバー停止時、srv.Shutdown の後・DBプールを閉じる前に呼ぶ。最長で RefreshTimeout ブロックする。
 func (u *GetNewsSentimentUsecase) Wait() {
 	u.refreshes.Wait()
 }
 
 // startRefresh は同じ銘柄の更新を singleflight で1本にまとめる。更新処理はリクエストの
-// context から切り離して最後まで走らせ、20秒で待つのを諦めたリクエストの分も結果をDBに残す。
+// context から切り離して最後まで走らせ、WaitTimeout で待つのを諦めたリクエストの分も結果をDBに残す。
 func (u *GetNewsSentimentUsecase) startRefresh(code stock.StockCode) <-chan singleflight.Result {
+	// DoChan より前に Add する: 先に DoChan すると、Wait() が Add より先に戻りうる。
 	u.refreshes.Add(1)
 	shared := u.group.DoChan(code.String(), func() (any, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), u.cfg.RefreshTimeout)
@@ -145,6 +147,7 @@ func (u *GetNewsSentimentUsecase) startRefresh(code stock.StockCode) <-chan sing
 		return u.refresh(ctx, code)
 	})
 	out := make(chan singleflight.Result, 1)
+	// 共有結果を受け取り切ってから Done する中継。呼び出し側が WaitTimeout で諦めても Wait() が更新完了まで待てるようにする。
 	go func() {
 		defer u.refreshes.Done()
 		out <- <-shared
@@ -201,6 +204,7 @@ func (u *GetNewsSentimentUsecase) refresh(ctx context.Context, code stock.StockC
 		if err := u.repo.TouchSnapshot(ctx, prev.ID, now); err != nil {
 			return nil, fmt.Errorf("touch snapshot: %w", err)
 		}
+		// prev はリポジトリ（テストではmock）が返した共有ポインタなので、書き換えずにコピーする。
 		touched := *prev
 		touched.CheckedAt = now
 		return &touched, nil

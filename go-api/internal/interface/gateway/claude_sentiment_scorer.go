@@ -126,6 +126,7 @@ func (s *ClaudeSentimentScorer) ScoreArticles(ctx context.Context, articles []se
 	return result, nil
 }
 
+// 記事ごとの判定ラベルは渡さず、タイトルだけを渡す（設計どおりの意図的な選択。ラベルを渡すのは仕様変更として扱う）。
 func (s *ClaudeSentimentScorer) ScoreStock(ctx context.Context, articles []sentiment.Article, price sentiment.PriceContext) (sentiment.StockScores, error) {
 	stockCode := ""
 	if len(articles) > 0 {
@@ -214,7 +215,7 @@ func (s *ClaudeSentimentScorer) callToolOnce(ctx context.Context, prompt string,
 }
 
 // formatDisclosures はタイトルを json.Marshal でエスケープして埋め込む。
-// json.Marshal は < > & を < 等に変換するため、タイトル内の "</disclosures>" でタグ構造が壊れない。
+// json.Marshal は < > & を < 等にエスケープするため、タイトル内の "</disclosures>" でタグ構造が壊れない。
 func formatDisclosures(articles []sentiment.Article) string {
 	var b strings.Builder
 	b.WriteString("<disclosures>\n")
@@ -241,6 +242,6 @@ func formatPriceContext(p sentiment.PriceContext) string {
 	if latest == "" {
 		latest = "不明"
 	}
-	return fmt.Sprintf("- 最新終値の日付: %s\n- 直近5営業日の騰落率: %s\n- 直近20営業日の騰落率: %s\n- 直近30営業日に対するZスコア: %s",
+	return fmt.Sprintf("- 最新終値の日付: %s\n- 直近5営業日の騰落率: %s\n- 直近20営業日の騰落率: %s\n- 直前29営業日に対する最新終値のZスコア: %s",
 		latest, percent(p.Return5d), percent(p.Return20d), z)
 }

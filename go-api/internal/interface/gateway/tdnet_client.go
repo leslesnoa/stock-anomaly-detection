@@ -14,13 +14,14 @@ import (
 )
 
 const (
-	tdnetLimit           = 5
-	tdnetLookbackDays    = 7
-	tdnetPubdateLayout   = "2006-01-02 15:04:05"
+	tdnetLimit         = 5
+	tdnetLookbackDays  = 7
+	tdnetPubdateLayout = "2006-01-02 15:04:05"
+	// 90日分で100件を超える銘柄は古いものが落ちる（ページングしていない）。
 	tdnetDisclosureLimit = 100
 )
 
-// yanoshinのpubdateはタイムゾーン無しのJST。コンテナにtzdataが無くても動くよう FixedZone を使う。
+// yanoshinのpubdateはタイムゾーン無しのJST。プロンプトに出す日付もJSTで揃える。コンテナにtzdataが無くても動くよう FixedZone を使う。
 var jst = time.FixedZone("JST", 9*60*60)
 
 type YanoshinTDnetClient struct {

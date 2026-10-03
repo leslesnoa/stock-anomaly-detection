@@ -6,6 +6,7 @@ import (
 )
 
 type Scorer interface {
+	// Name は scored_by としてDBに保存されるため、固定の識別子を返すこと。
 	Name() string
 	// ScoreArticles は入力と同じ順・同じ件数の判定を返す。
 	ScoreArticles(ctx context.Context, articles []Article) ([]ArticleJudgement, error)

@@ -183,6 +183,7 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("ERROR http server shutdown: %v", err)
 	}
+	// srv.Shutdown 後（新しい更新が始まらない）かつ pool.Close 前に待つ。最長で RefreshTimeout ブロックする。
 	newsSentimentUsecase.Wait()
 }
 
