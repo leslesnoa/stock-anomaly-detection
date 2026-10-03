@@ -204,7 +204,7 @@ func (u *GetNewsSentimentUsecase) refresh(ctx context.Context, code stock.StockC
 		if err := u.repo.TouchSnapshot(ctx, prev.ID, now); err != nil {
 			return nil, fmt.Errorf("touch snapshot: %w", err)
 		}
-		// prev はリポジトリ（テストではmock）が返した共有ポインタなので、書き換えずにコピーする。
+		// prev は呼び出し元と共有しうるポインタ（mockは同じものを返す）なので、書き換えずにコピーする。
 		touched := *prev
 		touched.CheckedAt = now
 		return &touched, nil
