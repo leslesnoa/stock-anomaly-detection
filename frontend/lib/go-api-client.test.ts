@@ -6,6 +6,7 @@ import {
   addWatchlistItem,
   removeWatchlistItem,
   fetchStockChart,
+  fetchNewsSentiment,
 } from "./go-api-client";
 
 describe("go-api-client", () => {
@@ -236,6 +237,53 @@ describe("go-api-client", () => {
     );
 
     const result = await fetchStockChart("jwt-token", "9999");
+
+    expect(result).toEqual({
+      ok: false,
+      error: "watchlist item not found",
+      status: 404,
+    });
+  });
+
+  it("fetchNewsSentiment returns the sentiment and sends bearer token", async () => {
+    const body = {
+      status: "ready",
+      stale: false,
+      scores: {
+        bullish: 72,
+        bearish: 18,
+        impact: 55,
+        confidence: 40,
+        short_term_up_probability: 58,
+      },
+      scored_by: "claude",
+      scored_at: "2026-09-30T06:10:00Z",
+      articles: [],
+    };
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(body), { status: 200 }),
+    );
+
+    const result = await fetchNewsSentiment("jwt-token", "7203");
+
+    expect(result).toEqual({ ok: true, sentiment: body });
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost:8080/stocks/7203/news-sentiment",
+      expect.objectContaining({
+        headers: { Authorization: "Bearer jwt-token" },
+        cache: "no-store",
+      }),
+    );
+  });
+
+  it("fetchNewsSentiment returns status 404 when the stock is not in the watchlist", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ error: "watchlist item not found" }), {
+        status: 404,
+      }),
+    );
+
+    const result = await fetchNewsSentiment("jwt-token", "6758");
 
     expect(result).toEqual({
       ok: false,

@@ -76,19 +76,8 @@ func (u *GetStockChartUsecase) Handle(ctx context.Context, userID, rawStockCode 
 		return StockChart{}, err
 	}
 
-	items, err := u.watchlists.FindByUserID(ctx, userID)
-	if err != nil {
+	if err := ensureInWatchlist(ctx, u.watchlists, userID, code); err != nil {
 		return StockChart{}, err
-	}
-	owned := false
-	for _, item := range items {
-		if item.StockCode == code {
-			owned = true
-			break
-		}
-	}
-	if !owned {
-		return StockChart{}, watchlist.ErrNotFound
 	}
 
 	quotes, err := u.prices.FindRecent(ctx, code, backfillDays)

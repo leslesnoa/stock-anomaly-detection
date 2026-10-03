@@ -34,6 +34,7 @@
 - Phase 3: ニュース取得はGo側（`gateway.YanoshinTDnetClient`、認証不要の無料TDnet開示情報API `webapi.yanoshin.jp` を利用。非公式サービスのためSLA・レート制限の明記なし）で実施。異常検知時に `AnalyzeAndNotifyUsecase` が ニュース取得→Pythonエンジン(`/analyze`)→Claude API→Slack通知→`notifications`テーブル保存の順に実行する
 - Claude APIはリトライ1回、失敗時はテクニカル指標のみのSlack通知にフォールバック。Slack通知は最大3回リトライ、失敗時も`slack_sent=false`で通知履歴を保存する
 - 監視対象銘柄はDBの`watchlist`テーブル（全ユーザー横断、重複除去）から動的に取得する。`MonitorUsecase.RunWithDynamicWatchlist`が5分間隔で再読込し、銘柄セットに変化があれば監視を再起動する（`STOCK_CODES`環境変数は廃止）。異常検知の閾値は`Watchlist.AlertThreshold`ではなく引き続き`ANOMALY_THRESHOLD`のグローバル固定値を使う
+- ニュースセンチメント: `GET /stocks/{code}/news-sentiment` が直近90日のTDnet開示（`news_articles`）と銘柄単位のAI推測スコア（`stock_sentiment_snapshots`、勝ち気・負け気・インパクト度・確信度・5営業日後上昇確率、各0〜100で独立）を返す。`GetNewsSentimentUsecase` は銘柄単位・全ユーザー共有の6時間キャッシュで、キャッシュ切れの時は`singleflight`で更新を1本にまとめ、記事IDの集合＋最新株価日付の指紋が前回と同じならAIを呼ばず`checked_at`だけ更新する。リクエストは20秒で待つのを諦めて`stale`か`pending`を返し、更新自体はリクエストから切り離して最大180秒走らせる。記事の判定はタイトルのみで、判定済みの記事は再判定しない（判定に失敗した記事は次回更新で再判定、1回あたり20件ずつ）。判定器は`sentiment.Scorer`で、`SENTIMENT_SCORER`で切り替える（今は`claude`のみ。TypeSafe AIのJevは別PRで追加予定）。Slack通知にはまだ組み込まない（Jevの精度検証後に判断）。スナップショットにはスコア算出時点の最新終値の日付・値（base_price_date / base_close）も保存し、5営業日後上昇確率の事後検証に使えるようにしている（検証ロジック自体は未実装）。
 
 ## テスト方針
 - 統合テスト: `testing.Short()` または環境変数未設定でスキップ
@@ -46,4 +47,4 @@
 - マイグレーションはgo-api起動時（および`persistence`パッケージの`TestMain`）にgolang-migrateで自動適用される。新しいマイグレーションを追加する場合は `go-api/migrations/` に `NNN_xxx.up.sql`/`NNN_xxx.down.sql` のペアで追加すればよく、CIワークフローへの追記は不要。ただし`docker-compose.yml`は`go-api/migrations`を`/docker-entrypoint-initdb.d`にマウントしており、フレッシュなボリューム上では全`*.sql`がasciibetical順に実行されるため`NNN_xxx.down.sql`が自分自身の`NNN_xxx.up.sql`より先に走る（"down" < "up"）。`.down.sql`は必ず`IF EXISTS`等のガードを入れて冪等にすること
 
 ## 環境変数（本番）
-DATABASE_URL, ANOMALY_THRESHOLD（デフォルト2.5）, ANTHROPIC_API_KEY, SLACK_WEBHOOK_URL, PYTHON_ENGINE_URL, CLAUDE_MODEL（デフォルト claude-opus-5）, JWT_SECRET, PORT（デフォルト8080）, DIRECTION_MODEL_RETRAIN_INTERVAL（デフォルト24h、AI方向分類器の再学習間隔。Go duration形式）
+DATABASE_URL, ANOMALY_THRESHOLD（デフォルト2.5）, ANTHROPIC_API_KEY, SLACK_WEBHOOK_URL, PYTHON_ENGINE_URL, CLAUDE_MODEL（デフォルト claude-opus-5）, JWT_SECRET, PORT（デフォルト8080）, DIRECTION_MODEL_RETRAIN_INTERVAL（デフォルト24h、AI方向分類器の再学習間隔。Go duration形式）, SENTIMENT_SCORER（任意、デフォルト claude。ニュースセンチメントの判定器。現在は claude のみ有効）

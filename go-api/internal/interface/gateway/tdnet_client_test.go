@@ -1,6 +1,7 @@
 package gateway_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -149,5 +150,113 @@ func TestYanoshinTDnetClient_FetchRecent_ErrorStatus(t *testing.T) {
 	code, _ := stock.NewStockCode("7203")
 
 	_, err := client.FetchRecent(code)
+	require.Error(t, err)
+}
+
+func TestYanoshinTDnetClient_FetchDisclosures(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /tdnet/list/7203.json", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "100", r.URL.Query().Get("limit"))
+		resp := map[string]any{
+			"items": []map[string]any{
+				{"Tdnet": map[string]string{
+					"id": "1279204", "title": "自己株式の取得状況に関するお知らせ",
+					"pubdate":      "2026-09-03 15:30:00",
+					"document_url": "https://webapi.yanoshin.jp/rd.php?https://www.release.tdnet.info/inbs/a.pdf",
+				}},
+				{"Tdnet": map[string]string{
+					"id": "1270000", "title": "範囲外の古い開示",
+					"pubdate": "2026-06-01 15:00:00", "document_url": "https://example.com/old.pdf",
+				}},
+				{"Tdnet": map[string]string{
+					"id": "1279999", "title": "日付が壊れている開示",
+					"pubdate": "not-a-date", "document_url": "https://example.com/broken.pdf",
+				}},
+				{"Tdnet": map[string]string{
+					"id": "", "title": "IDが無い開示",
+					"pubdate": "2026-09-04 15:30:00", "document_url": "https://example.com/noid.pdf",
+				}},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewYanoshinTDnetClientWithBaseURL(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+	since := time.Date(2026, 7, 2, 0, 0, 0, 0, time.UTC)
+
+	got, err := client.FetchDisclosures(context.Background(), code, since)
+	require.NoError(t, err)
+	require.Len(t, got, 1, "範囲外・日付不正・ID無しは除外される")
+	assert.Equal(t, "1279204", got[0].TdnetID)
+	assert.Equal(t, "自己株式の取得状況に関するお知らせ", got[0].Title)
+	assert.Equal(t, "https://webapi.yanoshin.jp/rd.php?https://www.release.tdnet.info/inbs/a.pdf", got[0].URL)
+	assert.True(t, got[0].PublishedAt.Equal(time.Date(2026, 9, 3, 6, 30, 0, 0, time.UTC)), "pubdateはJSTとして解釈する")
+}
+
+func TestYanoshinTDnetClient_FetchDisclosures_EmptyReturnsEmptySlice(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /tdnet/list/7203.json", func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"items": []any{}}))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewYanoshinTDnetClientWithBaseURL(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+
+	got, err := client.FetchDisclosures(context.Background(), code, time.Now().AddDate(0, 0, -90))
+	require.NoError(t, err)
+	assert.NotNil(t, got)
+	assert.Empty(t, got)
+}
+
+func TestYanoshinTDnetClient_FetchDisclosures_RejectsNonHttpsDocumentURL(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /tdnet/list/7203.json", func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"items": []map[string]any{
+				{"Tdnet": map[string]string{
+					"id": "1", "title": "JSスキームの開示",
+					"pubdate":      "2026-09-03 15:30:00",
+					"document_url": "javascript:alert(1)",
+				}},
+				{"Tdnet": map[string]string{
+					"id": "2", "title": "httpの開示",
+					"pubdate":      "2026-09-03 15:30:00",
+					"document_url": "http://example.com/a.pdf",
+				}},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewYanoshinTDnetClientWithBaseURL(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+	since := time.Date(2026, 7, 2, 0, 0, 0, 0, time.UTC)
+
+	got, err := client.FetchDisclosures(context.Background(), code, since)
+	require.NoError(t, err)
+	require.Len(t, got, 2, "URLが不正でも記事自体は残す")
+	assert.Empty(t, got[0].URL)
+	assert.Empty(t, got[1].URL)
+}
+
+func TestYanoshinTDnetClient_FetchDisclosures_NonOKStatus(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /tdnet/list/7203.json", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := gateway.NewYanoshinTDnetClientWithBaseURL(srv.URL)
+	code, _ := stock.NewStockCode("7203")
+
+	_, err := client.FetchDisclosures(context.Background(), code, time.Now())
 	require.Error(t, err)
 }

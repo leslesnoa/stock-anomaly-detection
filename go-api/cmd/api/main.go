@@ -91,6 +91,10 @@ func main() {
 	newsClient := gateway.NewYanoshinTDnetClient()
 	pythonEngineClient := gateway.NewPythonEngineClient(pythonEngineURL)
 	claudeClient := gateway.NewClaudeClient(anthropicAPIKey, claudeModel)
+	sentimentScorer, err := newSentimentScorer(os.Getenv("SENTIMENT_SCORER"), anthropicAPIKey, claudeModel)
+	if err != nil {
+		log.Fatalf("invalid SENTIMENT_SCORER: %v", err)
+	}
 	slackClient := gateway.NewSlackClient(slackWebhookURL)
 	notificationRepo := persistence.NewPgNotificationRepository(pool)
 	notifyUsecase := usecase.NewAnalyzeAndNotifyUsecase(newsClient, pythonEngineClient, claudeClient, slackClient, notificationRepo)
@@ -108,10 +112,13 @@ func main() {
 	watchlistUsecase := usecase.NewManageWatchlistUsecase(watchlistRepo, backfillUsecase, priceFetcher)
 	chartUsecase := usecase.NewGetStockChartUsecase(watchlistRepo, priceRepo, detector, pythonEngineClient, notificationRepo, threshold)
 	directionModelUsecase := usecase.NewTrainDirectionModelUsecase(watchlistRepo, priceRepo, pythonEngineClient)
+	sentimentRepo := persistence.NewPgSentimentRepository(pool)
+	newsSentimentUsecase := usecase.NewGetNewsSentimentUsecase(watchlistRepo, priceRepo, newsClient, sentimentScorer, sentimentRepo, detector, usecase.DefaultNewsSentimentConfig())
 
 	authHandler := handler.NewAuthHandler(registerUsecase, loginUsecase)
 	watchlistHandler := handler.NewWatchlistHandler(watchlistUsecase)
 	stockHandler := handler.NewStockHandler(chartUsecase)
+	newsSentimentHandler := handler.NewNewsSentimentHandler(newsSentimentUsecase)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handler.Health)
@@ -122,6 +129,7 @@ func main() {
 	mux.HandleFunc("DELETE /watchlist/{id}", handler.RequireAuth(tokenService, watchlistHandler.Remove))
 	mux.HandleFunc("PATCH /watchlist/{id}", handler.RequireAuth(tokenService, watchlistHandler.UpdateThreshold))
 	mux.HandleFunc("GET /stocks/{code}/chart", handler.RequireAuth(tokenService, stockHandler.Chart))
+	mux.HandleFunc("GET /stocks/{code}/news-sentiment", handler.RequireAuth(tokenService, newsSentimentHandler.NewsSentiment))
 
 	srv := &http.Server{
 		Addr:              ":" + port,
@@ -175,6 +183,8 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("ERROR http server shutdown: %v", err)
 	}
+	// srv.Shutdown 後（タイムアウトしなければ新しい更新は始まらない）かつ pool.Close 前に待つ。最長で RefreshTimeout ブロックする。
+	newsSentimentUsecase.Wait()
 }
 
 func mustEnv(key string) string {
