@@ -215,7 +215,7 @@ func (s *ClaudeSentimentScorer) callToolOnce(ctx context.Context, prompt string,
 }
 
 // formatDisclosures はタイトルを json.Marshal でエスケープして埋め込む。
-// json.Marshal は < > & を < 等にエスケープするため、タイトル内の "</disclosures>" でタグ構造が壊れない。
+// json.Marshal は < > & を \u003c 等にエスケープするため、タイトル内の "</disclosures>" でタグ構造が壊れない。
 func formatDisclosures(articles []sentiment.Article) string {
 	var b strings.Builder
 	b.WriteString("<disclosures>\n")
