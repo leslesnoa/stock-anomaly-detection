@@ -62,13 +62,13 @@ func toNewsSentimentResponse(ns usecase.NewsSentiment) newsSentimentResponse {
 		if s.Scores != nil {
 			resp.Scores = &sentimentScoresResponse{
 				Bullish: s.Scores.Bullish, Bearish: s.Scores.Bearish, Impact: s.Scores.Impact,
-				Confidence: s.Scores.Confidence, ShortTermUpProbability: s.Scores.ShortTermUp,
+				Confidence: s.Scores.Confidence, ShortTermUpProbability: s.Scores.ShortTermUpProbability,
 			}
 		}
 	}
 	for i, a := range ns.Articles {
 		article := newsArticleResponse{
-			Title: a.Title, URL: a.URL, PublishedAt: a.PublishedAt, SentimentConfidence: a.Confidence,
+			Title: a.Title, URL: a.URL, PublishedAt: a.PublishedAt, SentimentConfidence: a.SentimentConfidence,
 		}
 		if a.Sentiment != nil {
 			label := string(*a.Sentiment)

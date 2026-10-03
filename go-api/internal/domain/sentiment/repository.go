@@ -13,8 +13,8 @@ type Scorer interface {
 }
 
 type Repository interface {
-	// UpsertArticles は (stock_code, tdnet_id) が既にある記事を無視して保存する。
-	UpsertArticles(ctx context.Context, articles []Article) error
+	// InsertNewArticles は (stock_code, tdnet_id) が既にある記事を無視して保存する。
+	InsertNewArticles(ctx context.Context, articles []Article) error
 	SaveJudgements(ctx context.Context, articleIDs []string, judgements []ArticleJudgement, scoredBy string, at time.Time) error
 	// FindArticlesSince は公開日の降順で返す。該当なしなら空スライス。
 	FindArticlesSince(ctx context.Context, stockCode string, since time.Time) ([]Article, error)

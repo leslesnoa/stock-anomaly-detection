@@ -176,7 +176,7 @@ func (u *GetNewsSentimentUsecase) refresh(ctx context.Context, code stock.StockC
 	for i, d := range disclosures {
 		fetched[i] = sentiment.Article{StockCode: code.String(), TdnetID: d.TdnetID, Title: d.Title, URL: d.URL, PublishedAt: d.PublishedAt}
 	}
-	if err := u.repo.UpsertArticles(ctx, fetched); err != nil {
+	if err := u.repo.InsertNewArticles(ctx, fetched); err != nil {
 		return nil, fmt.Errorf("save articles: %w", err)
 	}
 
@@ -277,7 +277,7 @@ func (u *GetNewsSentimentUsecase) scoreUnscoredArticles(ctx context.Context, cod
 		for k, i := range chunk {
 			label, confidence, at := judgements[k].Sentiment, judgements[k].Confidence, now
 			articles[i].Sentiment = &label
-			articles[i].Confidence = &confidence
+			articles[i].SentimentConfidence = &confidence
 			articles[i].ScoredBy = &scoredBy
 			articles[i].ScoredAt = &at
 		}

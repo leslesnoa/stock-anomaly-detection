@@ -19,7 +19,7 @@ func NewPgSentimentRepository(conn *pgxpool.Pool) *PgSentimentRepository {
 	return &PgSentimentRepository{conn: conn}
 }
 
-func (r *PgSentimentRepository) UpsertArticles(ctx context.Context, articles []sentiment.Article) error {
+func (r *PgSentimentRepository) InsertNewArticles(ctx context.Context, articles []sentiment.Article) error {
 	if len(articles) == 0 {
 		return nil
 	}
@@ -87,7 +87,7 @@ func (r *PgSentimentRepository) FindArticlesSince(ctx context.Context, stockCode
 		var a sentiment.Article
 		var label *string
 		if err := rows.Scan(&a.ID, &a.StockCode, &a.TdnetID, &a.Title, &a.URL, &a.PublishedAt,
-			&label, &a.Confidence, &a.ScoredBy, &a.ScoredAt); err != nil {
+			&label, &a.SentimentConfidence, &a.ScoredBy, &a.ScoredAt); err != nil {
 			return nil, fmt.Errorf("scan news article %s: %w", stockCode, err)
 		}
 		if label != nil {
@@ -128,7 +128,7 @@ func (r *PgSentimentRepository) FindLatestSnapshot(ctx context.Context, stockCod
 	if bullish != nil && bearish != nil && impact != nil && confidence != nil && shortTermUp != nil {
 		s.Scores = &sentiment.StockScores{
 			Bullish: *bullish, Bearish: *bearish, Impact: *impact,
-			Confidence: *confidence, ShortTermUp: *shortTermUp,
+			Confidence: *confidence, ShortTermUpProbability: *shortTermUp,
 		}
 	}
 	return &s, nil
@@ -138,7 +138,7 @@ func (r *PgSentimentRepository) InsertSnapshot(ctx context.Context, s sentiment.
 	var bullish, bearish, impact, confidence, shortTermUp *int
 	if s.Scores != nil {
 		bullish, bearish, impact = &s.Scores.Bullish, &s.Scores.Bearish, &s.Scores.Impact
-		confidence, shortTermUp = &s.Scores.Confidence, &s.Scores.ShortTermUp
+		confidence, shortTermUp = &s.Scores.Confidence, &s.Scores.ShortTermUpProbability
 	}
 	var basePriceDate *time.Time
 	if s.BasePriceDate != "" {

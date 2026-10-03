@@ -183,7 +183,7 @@ func TestClaudeSentimentScorer_ScoreStock(t *testing.T) {
 
 	got, err := scorer.ScoreStock(context.Background(), sampleArticles(), price)
 	require.NoError(t, err)
-	assert.Equal(t, sentiment.StockScores{Bullish: 72, Bearish: 18, Impact: 55, Confidence: 40, ShortTermUp: 58}, got)
+	assert.Equal(t, sentiment.StockScores{Bullish: 72, Bearish: 18, Impact: 55, Confidence: 40, ShortTermUpProbability: 58}, got)
 
 	body := bodies()[0]
 	assert.Contains(t, body, "5営業日後の終値")

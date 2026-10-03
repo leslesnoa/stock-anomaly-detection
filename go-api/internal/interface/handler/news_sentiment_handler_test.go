@@ -49,13 +49,13 @@ func TestNewsSentimentHandler_Ready(t *testing.T) {
 		Status: usecase.NewsSentimentReady,
 		Stale:  true,
 		Snapshot: &sentiment.Snapshot{
-			Scores:    &sentiment.StockScores{Bullish: 72, Bearish: 18, Impact: 55, Confidence: 40, ShortTermUp: 58},
+			Scores:    &sentiment.StockScores{Bullish: 72, Bearish: 18, Impact: 55, Confidence: 40, ShortTermUpProbability: 58},
 			ScoredBy:  "claude",
 			CreatedAt: createdAt,
 			CheckedAt: createdAt.Add(time.Hour),
 		},
 		Articles: []sentiment.Article{
-			{Title: "上方修正", URL: "https://example.com/a.pdf", PublishedAt: time.Date(2026, 9, 3, 6, 30, 0, 0, time.UTC), Sentiment: &bullish, Confidence: &confidence},
+			{Title: "上方修正", URL: "https://example.com/a.pdf", PublishedAt: time.Date(2026, 9, 3, 6, 30, 0, 0, time.UTC), Sentiment: &bullish, SentimentConfidence: &confidence},
 			{Title: "未判定", URL: "https://example.com/b.pdf", PublishedAt: time.Date(2026, 9, 2, 6, 30, 0, 0, time.UTC)},
 		},
 	}})

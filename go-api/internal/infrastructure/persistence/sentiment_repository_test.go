@@ -31,16 +31,16 @@ func newSentimentRepo(t *testing.T) (*persistence.PgSentimentRepository, *pgxpoo
 	return persistence.NewPgSentimentRepository(conn), conn
 }
 
-func TestPgSentimentRepository_UpsertArticles_IgnoresDuplicates(t *testing.T) {
+func TestPgSentimentRepository_InsertNewArticles_IgnoresDuplicates(t *testing.T) {
 	repo, conn := newSentimentRepo(t)
 	ctx := context.Background()
 	published := time.Date(2026, 9, 3, 6, 30, 0, 0, time.UTC)
 
 	article := sentiment.Article{StockCode: "7203", TdnetID: "1279204", Title: "自己株式の取得状況に関するお知らせ", URL: "https://example.com/a.pdf", PublishedAt: published}
-	require.NoError(t, repo.UpsertArticles(ctx, []sentiment.Article{article}))
+	require.NoError(t, repo.InsertNewArticles(ctx, []sentiment.Article{article}))
 	article.Title = "上書きされないこと"
-	require.NoError(t, repo.UpsertArticles(ctx, []sentiment.Article{article}))
-	require.NoError(t, repo.UpsertArticles(ctx, nil))
+	require.NoError(t, repo.InsertNewArticles(ctx, []sentiment.Article{article}))
+	require.NoError(t, repo.InsertNewArticles(ctx, nil))
 
 	var count int
 	require.NoError(t, conn.QueryRow(ctx, "SELECT COUNT(*) FROM news_articles").Scan(&count))
@@ -59,7 +59,7 @@ func TestPgSentimentRepository_FindArticlesSince_FiltersAndOrders(t *testing.T) 
 	repo, _ := newSentimentRepo(t)
 	ctx := context.Background()
 	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
-	require.NoError(t, repo.UpsertArticles(ctx, []sentiment.Article{
+	require.NoError(t, repo.InsertNewArticles(ctx, []sentiment.Article{
 		{StockCode: "7203", TdnetID: "old", Title: "old", URL: "u", PublishedAt: base.AddDate(0, 0, -100)},
 		{StockCode: "7203", TdnetID: "a", Title: "a", URL: "u", PublishedAt: base},
 		{StockCode: "7203", TdnetID: "b", Title: "b", URL: "u", PublishedAt: base.AddDate(0, 0, 2)},
@@ -82,7 +82,7 @@ func TestPgSentimentRepository_SaveJudgements(t *testing.T) {
 	repo, _ := newSentimentRepo(t)
 	ctx := context.Background()
 	published := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
-	require.NoError(t, repo.UpsertArticles(ctx, []sentiment.Article{
+	require.NoError(t, repo.InsertNewArticles(ctx, []sentiment.Article{
 		{StockCode: "7203", TdnetID: "1", Title: "t", URL: "u", PublishedAt: published},
 	}))
 	articles, err := repo.FindArticlesSince(ctx, "7203", published.Add(-time.Hour))
@@ -97,7 +97,7 @@ func TestPgSentimentRepository_SaveJudgements(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got[0].Sentiment)
 	assert.Equal(t, sentiment.Bullish, *got[0].Sentiment)
-	assert.Equal(t, 81, *got[0].Confidence)
+	assert.Equal(t, 81, *got[0].SentimentConfidence)
 	assert.Equal(t, "claude", *got[0].ScoredBy)
 	assert.True(t, got[0].ScoredAt.Equal(scoredAt))
 
@@ -120,7 +120,7 @@ func TestPgSentimentRepository_Snapshots(t *testing.T) {
 	require.NoError(t, err)
 
 	newer := older.Add(7 * time.Hour)
-	scores := sentiment.StockScores{Bullish: 72, Bearish: 18, Impact: 55, Confidence: 40, ShortTermUp: 58}
+	scores := sentiment.StockScores{Bullish: 72, Bearish: 18, Impact: 55, Confidence: 40, ShortTermUpProbability: 58}
 	baseClose := 1234.5
 	id, err := repo.InsertSnapshot(ctx, sentiment.Snapshot{StockCode: "7203", Scores: &scores, ArticleCount: 3, InputFingerprint: "fp-1", ScoredBy: "claude",
 		BasePriceDate: "2026-09-29", BaseClose: &baseClose, CreatedAt: newer, CheckedAt: newer})

@@ -39,7 +39,7 @@ func (m *MockSentimentScorer) ScoreStock(ctx context.Context, articles []sentime
 
 type MockSentimentRepository struct{ mock.Mock }
 
-func (m *MockSentimentRepository) UpsertArticles(ctx context.Context, articles []sentiment.Article) error {
+func (m *MockSentimentRepository) InsertNewArticles(ctx context.Context, articles []sentiment.Article) error {
 	return m.Called(ctx, articles).Error(0)
 }
 

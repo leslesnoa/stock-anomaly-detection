@@ -29,16 +29,16 @@ func ParseLabel(s string) (Label, error) {
 }
 
 type Article struct {
-	ID          string
-	StockCode   string
-	TdnetID     string
-	Title       string
-	URL         string
-	PublishedAt time.Time
-	Sentiment   *Label
-	Confidence  *int
-	ScoredBy    *string
-	ScoredAt    *time.Time
+	ID                  string
+	StockCode           string
+	TdnetID             string
+	Title               string
+	URL                 string
+	PublishedAt         time.Time
+	Sentiment           *Label
+	SentimentConfidence *int
+	ScoredBy            *string
+	ScoredAt            *time.Time
 }
 
 type ArticleJudgement struct {
@@ -61,13 +61,13 @@ type PriceContext struct {
 }
 
 // StockScores の各値は0-100で互いに独立（合計100にはならない）。
-// ShortTermUp は「5営業日後の終値が、スコア算出時点の最新終値を上回る確率」。
+// ShortTermUpProbability は「5営業日後の終値が、スコア算出時点の最新終値を上回る確率」。
 type StockScores struct {
-	Bullish     int
-	Bearish     int
-	Impact      int
-	Confidence  int
-	ShortTermUp int
+	Bullish                int
+	Bearish                int
+	Impact                 int
+	Confidence             int
+	ShortTermUpProbability int
 }
 
 func (s StockScores) Validate() error {
@@ -79,7 +79,7 @@ func (s StockScores) Validate() error {
 		{"bearish", s.Bearish},
 		{"impact", s.Impact},
 		{"confidence", s.Confidence},
-		{"short_term_up", s.ShortTermUp},
+		{"short_term_up_probability", s.ShortTermUpProbability},
 	} {
 		if err := validatePercent(f.name, f.value); err != nil {
 			return err

@@ -151,18 +151,18 @@ func (s *ClaudeSentimentScorer) ScoreStock(ctx context.Context, articles []senti
 		InputSchema: stockScoresSchema,
 	}, func(raw json.RawMessage) error {
 		var payload struct {
-			Bullish     int `json:"bullish"`
-			Bearish     int `json:"bearish"`
-			Impact      int `json:"impact"`
-			Confidence  int `json:"confidence"`
-			ShortTermUp int `json:"short_term_up_probability"`
+			Bullish                int `json:"bullish"`
+			Bearish                int `json:"bearish"`
+			Impact                 int `json:"impact"`
+			Confidence             int `json:"confidence"`
+			ShortTermUpProbability int `json:"short_term_up_probability"`
 		}
 		if err := json.Unmarshal(raw, &payload); err != nil {
 			return fmt.Errorf("decode stock scores: %w", err)
 		}
 		candidate := sentiment.StockScores{
 			Bullish: payload.Bullish, Bearish: payload.Bearish, Impact: payload.Impact,
-			Confidence: payload.Confidence, ShortTermUp: payload.ShortTermUp,
+			Confidence: payload.Confidence, ShortTermUpProbability: payload.ShortTermUpProbability,
 		}
 		if err := candidate.Validate(); err != nil {
 			return err

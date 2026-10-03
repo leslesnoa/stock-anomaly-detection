@@ -27,15 +27,15 @@ func TestArticleJudgement_Validate(t *testing.T) {
 }
 
 func TestStockScores_Validate(t *testing.T) {
-	valid := sentiment.StockScores{Bullish: 72, Bearish: 18, Impact: 55, Confidence: 40, ShortTermUp: 58}
+	valid := sentiment.StockScores{Bullish: 72, Bearish: 18, Impact: 55, Confidence: 40, ShortTermUpProbability: 58}
 	require.NoError(t, valid.Validate())
 
 	for name, mutate := range map[string]func(*sentiment.StockScores){
-		"bullish":       func(s *sentiment.StockScores) { s.Bullish = 101 },
-		"bearish":       func(s *sentiment.StockScores) { s.Bearish = -1 },
-		"impact":        func(s *sentiment.StockScores) { s.Impact = 200 },
-		"confidence":    func(s *sentiment.StockScores) { s.Confidence = -5 },
-		"short_term_up": func(s *sentiment.StockScores) { s.ShortTermUp = 101 },
+		"bullish":                   func(s *sentiment.StockScores) { s.Bullish = 101 },
+		"bearish":                   func(s *sentiment.StockScores) { s.Bearish = -1 },
+		"impact":                    func(s *sentiment.StockScores) { s.Impact = 200 },
+		"confidence":                func(s *sentiment.StockScores) { s.Confidence = -5 },
+		"short_term_up_probability": func(s *sentiment.StockScores) { s.ShortTermUpProbability = 101 },
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := valid

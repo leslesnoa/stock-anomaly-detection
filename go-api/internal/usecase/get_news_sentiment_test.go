@@ -58,7 +58,7 @@ func intPtr(v int) *int                           { return &v }
 
 func scoredArticle(id, tdnetID string) sentiment.Article {
 	return sentiment.Article{ID: id, StockCode: "7203", TdnetID: tdnetID, Title: "t-" + tdnetID,
-		PublishedAt: sentimentNow.AddDate(0, 0, -3), Sentiment: labelPtr(sentiment.Bullish), Confidence: intPtr(80)}
+		PublishedAt: sentimentNow.AddDate(0, 0, -3), Sentiment: labelPtr(sentiment.Bullish), SentimentConfidence: intPtr(80)}
 }
 
 func unscoredArticle(id, tdnetID string) sentiment.Article {
@@ -97,7 +97,7 @@ func TestGetNewsSentiment_ExpiredCacheWithSameInputOnlyTouches(t *testing.T) {
 	d.repo.On("FindLatestSnapshot", mock.Anything, "7203").Return(prev, nil)
 	d.disclosures.On("FetchDisclosures", mock.Anything, code, mock.Anything).
 		Return([]news.Disclosure{{TdnetID: "1", Title: "t-1", PublishedAt: sentimentNow.AddDate(0, 0, -3)}}, nil)
-	d.repo.On("UpsertArticles", mock.Anything, mock.Anything).Return(nil)
+	d.repo.On("InsertNewArticles", mock.Anything, mock.Anything).Return(nil)
 	d.repo.On("FindArticlesSince", mock.Anything, "7203", mock.Anything).Return(articles, nil)
 	d.prices.On("FindRecent", mock.Anything, code, 30).Return(quotes, nil)
 	d.repo.On("TouchSnapshot", mock.Anything, "snap-1", sentimentNow).Return(nil)
@@ -123,14 +123,14 @@ func TestGetNewsSentiment_NewArticlesScoresOnlyUnscoredAndInsertsSnapshot(t *tes
 	code, _ := stock.NewStockCode("7203")
 	articles := []sentiment.Article{unscoredArticle("b", "2"), scoredArticle("a", "1")}
 	quotes := buildQuotes(30)
-	scores := sentiment.StockScores{Bullish: 72, Bearish: 18, Impact: 55, Confidence: 40, ShortTermUp: 58}
+	scores := sentiment.StockScores{Bullish: 72, Bearish: 18, Impact: 55, Confidence: 40, ShortTermUpProbability: 58}
 
 	d.repo.On("FindLatestSnapshot", mock.Anything, "7203").Return(nil, nil)
 	d.disclosures.On("FetchDisclosures", mock.Anything, code, sentimentNow.AddDate(0, 0, -90)).Return([]news.Disclosure{
 		{TdnetID: "2", Title: "t-2", URL: "https://example.com/2.pdf", PublishedAt: sentimentNow.AddDate(0, 0, -1)},
 		{TdnetID: "1", Title: "t-1", URL: "https://example.com/1.pdf", PublishedAt: sentimentNow.AddDate(0, 0, -3)},
 	}, nil)
-	d.repo.On("UpsertArticles", mock.Anything, mock.MatchedBy(func(as []sentiment.Article) bool {
+	d.repo.On("InsertNewArticles", mock.Anything, mock.MatchedBy(func(as []sentiment.Article) bool {
 		return len(as) == 2 && as[0].StockCode == "7203" && as[0].TdnetID == "2" && as[0].URL == "https://example.com/2.pdf"
 	})).Return(nil)
 	d.repo.On("FindArticlesSince", mock.Anything, "7203", sentimentNow.AddDate(0, 0, -90)).Return(articles, nil)
@@ -166,11 +166,11 @@ func TestGetNewsSentiment_ArticleScoringFailureStillScoresStock(t *testing.T) {
 	d := newSentimentDeps(t)
 	code, _ := stock.NewStockCode("7203")
 	articles := []sentiment.Article{unscoredArticle("b", "2")}
-	scores := sentiment.StockScores{Bullish: 10, Bearish: 10, Impact: 10, Confidence: 10, ShortTermUp: 50}
+	scores := sentiment.StockScores{Bullish: 10, Bearish: 10, Impact: 10, Confidence: 10, ShortTermUpProbability: 50}
 
 	d.repo.On("FindLatestSnapshot", mock.Anything, "7203").Return(nil, nil)
 	d.disclosures.On("FetchDisclosures", mock.Anything, code, mock.Anything).Return([]news.Disclosure{{TdnetID: "2", Title: "t-2"}}, nil)
-	d.repo.On("UpsertArticles", mock.Anything, mock.Anything).Return(nil)
+	d.repo.On("InsertNewArticles", mock.Anything, mock.Anything).Return(nil)
 	d.repo.On("FindArticlesSince", mock.Anything, "7203", mock.Anything).Return(articles, nil)
 	d.scorer.On("ScoreArticles", mock.Anything, mock.Anything).Return(nil, errors.New("claude down"))
 	d.prices.On("FindRecent", mock.Anything, code, 30).Return(buildQuotes(30), nil)
@@ -208,11 +208,11 @@ func TestGetNewsSentiment_ManyUnscoredArticlesAreScoredInBatches(t *testing.T) {
 	for i, a := range articles[20:] {
 		secondChunkIDs[i] = a.ID
 	}
-	scores := sentiment.StockScores{Bullish: 40, Bearish: 30, Impact: 20, Confidence: 10, ShortTermUp: 50}
+	scores := sentiment.StockScores{Bullish: 40, Bearish: 30, Impact: 20, Confidence: 10, ShortTermUpProbability: 50}
 
 	d.repo.On("FindLatestSnapshot", mock.Anything, "7203").Return(nil, nil)
 	d.disclosures.On("FetchDisclosures", mock.Anything, code, mock.Anything).Return([]news.Disclosure{}, nil)
-	d.repo.On("UpsertArticles", mock.Anything, mock.Anything).Return(nil)
+	d.repo.On("InsertNewArticles", mock.Anything, mock.Anything).Return(nil)
 	d.repo.On("FindArticlesSince", mock.Anything, "7203", mock.Anything).Return(articles, nil)
 	d.scorer.On("ScoreArticles", mock.Anything, mock.MatchedBy(func(as []sentiment.Article) bool {
 		return len(as) == 20
@@ -261,11 +261,11 @@ func TestGetNewsSentiment_FirstChunkScoringFailureStillScoresSecondChunkAndStock
 	for i, a := range articles[20:] {
 		secondChunkIDs[i] = a.ID
 	}
-	scores := sentiment.StockScores{Bullish: 10, Bearish: 10, Impact: 10, Confidence: 10, ShortTermUp: 50}
+	scores := sentiment.StockScores{Bullish: 10, Bearish: 10, Impact: 10, Confidence: 10, ShortTermUpProbability: 50}
 
 	d.repo.On("FindLatestSnapshot", mock.Anything, "7203").Return(nil, nil)
 	d.disclosures.On("FetchDisclosures", mock.Anything, code, mock.Anything).Return([]news.Disclosure{}, nil)
-	d.repo.On("UpsertArticles", mock.Anything, mock.Anything).Return(nil)
+	d.repo.On("InsertNewArticles", mock.Anything, mock.Anything).Return(nil)
 	d.repo.On("FindArticlesSince", mock.Anything, "7203", mock.Anything).Return(articles, nil)
 	d.scorer.On("ScoreArticles", mock.Anything, mock.MatchedBy(func(as []sentiment.Article) bool {
 		return len(as) == 20
@@ -296,11 +296,11 @@ func TestGetNewsSentiment_ShortPriceHistoryPassesNilIndicators(t *testing.T) {
 
 	d.repo.On("FindLatestSnapshot", mock.Anything, "7203").Return(nil, nil)
 	d.disclosures.On("FetchDisclosures", mock.Anything, code, mock.Anything).Return([]news.Disclosure{{TdnetID: "1", Title: "t-1"}}, nil)
-	d.repo.On("UpsertArticles", mock.Anything, mock.Anything).Return(nil)
+	d.repo.On("InsertNewArticles", mock.Anything, mock.Anything).Return(nil)
 	d.repo.On("FindArticlesSince", mock.Anything, "7203", mock.Anything).Return(articles, nil)
 	d.prices.On("FindRecent", mock.Anything, code, 30).Return(quotes, nil)
 	d.scorer.On("ScoreStock", mock.Anything, mock.Anything, sentiment.PriceContext{LatestDate: quotes[2].Date}).
-		Return(sentiment.StockScores{Confidence: 5, ShortTermUp: 50}, nil)
+		Return(sentiment.StockScores{Confidence: 5, ShortTermUpProbability: 50}, nil)
 	d.repo.On("InsertSnapshot", mock.Anything, mock.Anything).Return("snap-new", nil)
 	uc := d.usecase(2 * time.Second)
 
@@ -317,7 +317,7 @@ func TestGetNewsSentiment_NoArticlesInsertsEmptySnapshotWithoutAI(t *testing.T) 
 
 	d.repo.On("FindLatestSnapshot", mock.Anything, "7203").Return(nil, nil)
 	d.disclosures.On("FetchDisclosures", mock.Anything, code, mock.Anything).Return([]news.Disclosure{}, nil)
-	d.repo.On("UpsertArticles", mock.Anything, mock.Anything).Return(nil)
+	d.repo.On("InsertNewArticles", mock.Anything, mock.Anything).Return(nil)
 	d.repo.On("FindArticlesSince", mock.Anything, "7203", mock.Anything).Return([]sentiment.Article{}, nil)
 	d.prices.On("FindRecent", mock.Anything, code, 30).Return(buildQuotes(30), nil)
 	d.repo.On("InsertSnapshot", mock.Anything, mock.MatchedBy(func(s sentiment.Snapshot) bool {
@@ -343,7 +343,7 @@ func TestGetNewsSentiment_RefreshFailureFallsBackToStaleSnapshot(t *testing.T) {
 
 	d.repo.On("FindLatestSnapshot", mock.Anything, "7203").Return(old, nil)
 	d.disclosures.On("FetchDisclosures", mock.Anything, code, mock.Anything).Return([]news.Disclosure{{TdnetID: "1", Title: "t-1"}}, nil)
-	d.repo.On("UpsertArticles", mock.Anything, mock.Anything).Return(nil)
+	d.repo.On("InsertNewArticles", mock.Anything, mock.Anything).Return(nil)
 	d.repo.On("FindArticlesSince", mock.Anything, "7203", mock.Anything).Return(articles, nil)
 	d.prices.On("FindRecent", mock.Anything, code, 30).Return(buildQuotes(30), nil)
 	d.scorer.On("ScoreStock", mock.Anything, mock.Anything, mock.Anything).Return(sentiment.StockScores{}, errors.New("claude down"))
@@ -453,11 +453,11 @@ func TestGetNewsSentiment_NoPricesSavesEmptyBasePrice(t *testing.T) {
 	d := newSentimentDeps(t)
 	code, _ := stock.NewStockCode("7203")
 	articles := []sentiment.Article{scoredArticle("a", "1")}
-	scores := sentiment.StockScores{Bullish: 50, Bearish: 50, Impact: 50, Confidence: 50, ShortTermUp: 50}
+	scores := sentiment.StockScores{Bullish: 50, Bearish: 50, Impact: 50, Confidence: 50, ShortTermUpProbability: 50}
 
 	d.repo.On("FindLatestSnapshot", mock.Anything, "7203").Return(nil, nil)
 	d.disclosures.On("FetchDisclosures", mock.Anything, code, mock.Anything).Return([]news.Disclosure{}, nil)
-	d.repo.On("UpsertArticles", mock.Anything, mock.Anything).Return(nil)
+	d.repo.On("InsertNewArticles", mock.Anything, mock.Anything).Return(nil)
 	d.repo.On("FindArticlesSince", mock.Anything, "7203", mock.Anything).Return(articles, nil)
 	d.prices.On("FindRecent", mock.Anything, code, 30).Return([]stock.Quote{}, nil)
 	d.scorer.On("ScoreStock", mock.Anything, mock.Anything, mock.Anything).Return(scores, nil)
